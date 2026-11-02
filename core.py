@@ -119,8 +119,9 @@ EDITABLE = {
     "r2_account_id": str, "r2_access_key_id": str, "r2_bucket": str, "r2_public_url": str, "r2_folder": str,
 }
 SECRET_FIELDS = ("r2_secret_access_key", "ebay_client_secret", "gemini_api_key", "imgbb_api_key")
+# brand_in_title riêng của site: chưa có = bật (theo ô chung "Tên hãng ở đầu tiêu đề"); False = site này không gắn tên hãng
 SITE_FIELDS = {"prefix": str, "use_proxy": bool, "price_percent": str,
-               "shipping_profile": str, "delay": str}
+               "shipping_profile": str, "delay": str, "brand_in_title": bool}
 
 
 def site_delay(cfg, key):
@@ -1715,8 +1716,11 @@ DEPT_WORD = {"women": "Women's", "men": "Men's", "girls": "Girls'", "boys": "Boy
 
 
 def title_brand(prod, cfg):
-    """Tên hãng đặt ở đầu tiêu đề (Cài đặt "Tên hãng ở đầu tiêu đề"); ô Brand của listing vẫn là Unbranded."""
+    """Tên hãng đặt ở đầu tiêu đề (Cài đặt "Tên hãng ở đầu tiêu đề"); ô Brand của listing vẫn là Unbranded.
+    Tắt ở ô chung = mọi site không gắn; tắt ở nút đầu tab site = riêng site đó không gắn."""
     if not cfg.get("brand_in_title", True):
+        return ""
+    if prod.get("site") and site_cfg(cfg, prod["site"]).get("brand_in_title", True) is False:
         return ""
     # Fanatics ghi hãng hàng in theo đơn là "Fanatics MTO Label" -> tiêu đề chỉ "Fanatics" (cả dòng đã chạy từ trước)
     return re.sub(r"(?i)\s+MTO Label$", "", (prod.get("brand") or "").strip())

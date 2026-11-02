@@ -681,6 +681,7 @@
           <input type="number" id="sitePct" min="50" max="500" step="1"> % giá site</label>
         <label class="switch" title="Tải ảnh sản phẩm về, chỉnh chuẩn eBay rồi up lên host ảnh"><input type="checkbox" id="upload"><span></span> Up ảnh lên <b id="hostName">freeimage.host</b></label>
         <label class="switch" title="Mặc định tắt: chạy IP gốc, bị chặn thì tự chuyển sang proxy. Bật = đi qua proxy ngay từ đầu"><input type="checkbox" id="useProxy"><span></span> Luôn đi qua proxy</label>
+        <label class="switch" id="brandInTitleBox"><input type="checkbox" id="brandInTitle"><span></span> Tên hãng ở đầu tiêu đề</label>
         <span class="pxinfo" id="pxInfo"></span>
       </div>
     </header>
@@ -1189,7 +1190,19 @@ function applyTabUI() {
   $("#links").placeholder = (s.examples || []).join("\n") + "\nMỗi dòng 1 link — Profile và Action Country điền trong bảng Kết quả sau khi chạy, hoặc Import file có sẵn cột Profile";
   $("#makeTemplate").title = "Tạo file Excel mẫu (cột Profile, Action Country, Link sản phẩm, Site — Site chọn trong danh sách xổ xuống, luôn cập nhật đủ site mới) và mở bằng Excel";
   $("#useProxy").checked = !!cfg.sites[tab]?.use_proxy;
+  syncBrandSwitch();
   syncProxyInfo();
+}
+
+// Nút "Tên hãng ở đầu tiêu đề" của site đang mở: ô chung trong Cài đặt tắt thì mọi site tắt (nút bị khoá)
+const siteBrandOn = (key) => cfg.brand_in_title !== false && cfg.sites?.[key]?.brand_in_title !== false;
+function syncBrandSwitch() {
+  const all = cfg.brand_in_title !== false;
+  $("#brandInTitle").checked = siteBrandOn(tab);
+  $("#brandInTitle").disabled = !all;
+  $("#brandInTitleBox").title = all
+    ? "Bật = tiêu đề có tên hãng ở đầu (riêng site đang mở). Áp dụng cho lần chạy sau — dòng đã có trong bảng giữ nguyên"
+    : "Đang tắt cho mọi site ở Cài đặt → \"Tên hãng ở đầu tiêu đề\" — bật lại ở đó trước";
 }
 
 // Dòng tóm tắt dưới tên site: % giá, proxy, Category tự động, AI tiêu đề
@@ -1202,7 +1215,8 @@ function renderPageSub() {
   const bits = [["SKU", `${sc.prefix || ""}…`],
     ["Category", !(cfg.ebay_client_id && cfg.ebay_client_secret_set) ? "chưa có eBay API — gõ tay"
       : cfg.auto_category ? "eBay tự gợi ý" : "gõ tay"],
-    ["Tiêu đề", cfg.ai_titles && cfg.gemini_api_key_set ? "AI tự viết" : "theo site"]];
+    ["Tiêu đề", (cfg.ai_titles && cfg.gemini_api_key_set ? "AI tự viết" : "theo site")
+      + (siteBrandOn(tab) ? "" : ", không tên hãng")]];
   $("#pageSub").replaceChildren(...bits.flatMap(([k, v], i) => [i ? " · " : "", `${k}: `, el("b", { textContent: v })]),
     " · ", Object.assign(el("a", { href: "#", textContent: "đổi" }), { onclick: (e) => { e.preventDefault(); openSettings(); } }));
 }
@@ -1253,6 +1267,7 @@ async function refreshCfg() {
     if (editing()) return;   // vừa mở Cài đặt / bấm vào ô % trong lúc chờ -> không đè
     cfg = fresh;
     $("#useProxy").checked = !!cfg.sites?.[tab]?.use_proxy;
+    syncBrandSwitch();
     renderPageSub();
     syncProxyInfo();
     renderSettings();   // form Cài đặt (đang đóng) cũng theo bản mới, lần lưu ngầm sau không ghi đè bằng số cũ
@@ -3070,6 +3085,12 @@ async function tkRun(skus, resume = false) {
     const on = $("#useProxy").checked;
     try { cfg = await api("/api/config", { sites: { [tab]: { use_proxy: on } } }); syncProxyInfo(); renderTabs(); }
     catch (e) { alert(e.message); }
+  };
+  $("#brandInTitle").onchange = async () => {
+    // Chỉ đổi site đang mở; lần chạy sau mới có / mất tên hãng ở đầu tiêu đề
+    const on = $("#brandInTitle").checked;
+    try { cfg = await api("/api/config", { sites: { [tab]: { brand_in_title: on } } }); syncBrandSwitch(); renderPageSub(); }
+    catch (e) { alert(e.message); syncBrandSwitch(); }
   };
   // % giá của site đang mở: sửa ở đầu trang -> lưu vào ô "% giá" của site đó, bảng Kết quả tính lại giá
   $("#sitePct").onchange = async () => {

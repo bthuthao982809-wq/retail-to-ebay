@@ -1725,7 +1725,8 @@ class Handler(BaseHTTPRequestHandler):
                 site_changed = {(t, k) for t, sc in cfg["sites"].items()
                                 for k in set(sc) | set(old["sites"].get(t, {}))
                                 if sc.get(k) != old["sites"].get(t, {}).get(k)}
-                site_changed = {(t, k) for t, k in site_changed if k not in ("use_proxy", "delay", "prefix")}
+                # brand_in_title: áp dụng cho lần chạy sau (không dựng lại tiêu đề đã có / đã sửa tay)
+                site_changed = {(t, k) for t, k in site_changed if k not in ("use_proxy", "delay", "prefix", "brand_in_title")}
                 if changed <= PRICE_KEYS and all(k == "price_percent" for _, k in site_changed):
                     # chỉ đổi giá: tính lại giá (nhanh) — đổi % chung thì mọi tab, đổi % 1 site thì site đó
                     tabs = list(ENGINE.sessions) if changed else {t for t, _ in site_changed}
