@@ -1,0 +1,97 @@
+RETAIL -> EBAY CSV — HUONG DAN NHANH
+=====================================
+
+Tool doc san pham tu cac trang ban le (Theory, Banana Republic, Touch of Class, Janie and Jack,
+Eileen Fisher, Azazie, Soho Home, Talbots, Personal Creations, Tommy Bahama, prAna, Sonos, Hollister, Fanatics, Best Buy...) roi xuat file CSV de up len eBay
+bang File Exchange / Seller Hub Reports. Moi site 1 tab. Moi Profile (acc eBay) ra 1 file CSV rieng.
+
+0. CAI DAT
+   - Giai nen ca file zip vao 1 thu muc rieng (vd D:\RetailToEbay), mo RetailToEbay.exe.
+   - GIU NGUYEN thu muc _internal canh RetailToEbay.exe (xoa / tach rieng exe ra se khong mo duoc).
+     Muon mo nhanh tu Desktop: chuot phai RetailToEbay.exe > Send to > Desktop (create shortcut).
+   - Lan dau: gui MA MAY hien tren man hinh kich hoat cho admin qua Telegram, dan key nhan duoc vao.
+
+   CACH CAP NHAT KHI CO BAN MOI (giu nguyen cai dat, key, du lieu cu):
+   1) Tat tool (dong cua so RetailToEbay, dam bao khong con chay).
+   2) Giai nen file zip moi VAO CHINH THU MUC DANG DUNG (cung noi co RetailToEbay.exe cu) va chon "Replace / Ghi de tat ca".
+      KHONG giai nen sang thu muc khac, KHONG xoa thu muc cu — neu khong tool se nhu may moi (mat cai dat, hoi lai key).
+   3) Mo lai RetailToEbay.exe. Cai dat cu van con; tinh nang / site moi tu duoc bo sung vao cai dat cu.
+   File ban moi chi ghi de chuong trinh (RetailToEbay.exe, _internal, HUONG DAN, file mau). Du lieu cua ban nam canh exe
+   va KHONG nam trong file zip nen khong bi ghi de: config.json (cai dat), license.dat (key), sessions\ (bang ket qua),
+   tracking.json (theo doi), output\ (file CSV da xuat), image_cache.json, img_tmp\, chrome-profile*\.
+   Neu lỡ giai nen sang thu muc moi: chep cac muc tren tu thu muc cu sang thu muc moi (ghi de) la xong.
+
+1. LAN DAU MO TOOL
+   - Mo "Cai dat listing", dien: Location, Shipping / Return / Payment profile (dung ten
+     business policy tren acc eBay), % gia eBay so voi gia site (vd 130 = gia site x 1.3).
+   - Proxy: dat file Proxy.txt (moi dong ip:port:user:pass) canh tool hoac tren Desktop,
+     hoac dien duong dan file o muc Proxy. Bam "Kiem tra 3 proxy dau" de thu (chi kiem file chung).
+   - Proxy rieng cho 1 site: Cai dat -> "Proxy rieng theo site" -> chon site, dan proxy, bam "Them vao site da chon".
+     Site co proxy rieng chay theo thu tu: IP goc -> proxy rieng -> proxy chung. Site khong co trong muc do chi dung proxy chung.
+     Moi site mot dong: nut "Kiem tra" (thu 3 proxy dau: nuoc, nha mang, co phai IP hosting), "+ Them", "Xoa het".
+     Vi du Best Buy: IP Viet Nam dan cu + vai proxy My o dai mang khac nhau; proxy chung giu proxy My cho cac site con lai
+     (Touch of Class, Tommy Bahama, Soho Home, Fanatics, Eileen Fisher chan IP Viet Nam). Best Buy chan ngay IP hosting/VPS.
+     (Cach cu van dung duoc: file Proxy-<ten site>.txt canh Proxy.txt, chi doc khi site do chua dan proxy rieng trong tool.)
+   - Chuot phai vao 1 dong trong bang Ket qua -> "Copy link" de chep link san pham.
+   - Bam "Luu cai dat".
+
+2. CHAY
+   - Chon tab site, dan link san pham (moi dong 1 link) hoac bam "Import Excel / CSV".
+   - File Excel mau (thu muc "file mau" hoac nut "File Excel mau" trong tool): 4 cot
+     Profile | Action Country | Link san pham | Site. Cot Site chon trong danh sach xo xuong.
+     1 file co the chua link nhieu site: Import o tab nao thi tool chi lay dong cua site do
+     va bao so dong cua site khac. Nut "File Excel mau" luon tao file moi co du site moi them.
+   - Tool chay IP goc truoc, site nao chan thi tu chuyen sang proxy (can co proxy trong Cai dat).
+     Muon ep 1 site luon di proxy: bat nut "Luon di qua proxy" o dau tab site do. Touch of Class can mo Chrome — dung tat cua so Chrome khi tool dang chay.
+     Best Buy mo tung trang bang trinh duyet Camoufox (Firefox chong nhan dien bot), chay xong tu dong. Bi cat ket noi thi tool
+     tu chuyen sang proxy, proxy cung bi cat thi doi proxy ke tiep; 2 link lien nhau van bi cat thi tool tu dung, doi 30-60 phut
+     roi bam "Chay tiep". Nen nghi 30-45 giay giua cac link va chay moi lan khoang 10-20 link.
+   - Bam "Chay". Xong se co file CSV goc trong output\<site>\goc\<lan chay>\.
+
+   - File co link nhieu site: bam "Nhap file tong (nhieu site)" o tren cung cot trai -> tool tu chia link ve dung tab
+     tung site (theo cot Site; o trong thi nhan theo link). Tab co link cho chay co so link + cham xanh nhap nhay.
+     Chon "chay tat ca site" hoac tu bam Chay o tung tab.
+   - Cac site chay song song duoc (moi site 1 luong rieng), toi da "So site chay cung luc" trong Cai dat (mac dinh 3);
+     site thu 4 tro di cho toi luot. Cung 1 site thi van chay lan luot tung link.
+
+3. SUA TRUOC KHI XUAT
+   - Bang Ket qua: sua tieu de (toi da 80 ky tu), Profile, Action Country, Category ID tung dong.
+     Tich nhieu dong de dien nhanh Profile / Country / Category.
+   - Nut "Xem": xem truoc listing (anh, mau, size, gia tung bien the, mo ta).
+   - Category: dien key eBay API (Client ID / Client secret, app Production tren developer.ebay.com)
+     trong Cai dat -> tool tu hoi eBay Category hop voi tung san pham va tu dien item specifics.
+     Bam vao o Category de chon goi y khac, hoac go Category ID. Muon ep 1 nhom hang vao Category
+     co dinh thi them "Quy tac ep Category". CHUA DIEN key eBay thi tool khong tu chon Category va
+     khong tu dien item specifics (phai go Category ID tung dong).
+   - Dong "chua co Category" (thuong do key eBay het han muc goi trong ngay, han muc tinh lai 07:00 UTC):
+     bam nut "Hoi lai" trong o Category, hoac "Hoi lai Category cho cac dong thieu" o thanh do duoi bang.
+   - Trong "Xem", chon them 1 mau chua co anh: tool tu tai + up anh mau do, co thanh tien trinh tung anh
+     (Huy duoc; anh loi thi bam "Thu lai" - chi tai lai dung cac anh loi). Tai xong moi bam "Luu bien the".
+   - Dong bao "Thieu item specifics bat buoc": bam "Xem", dien o to do (dau *), bam "Luu item specifics".
+   - Bam "Xuat CSV" de luu file moi (chon thu muc). Moi lan chi up 1 bo: bo goc HOAC bo da xuat.
+
+   - Noi up anh (Cai dat -> Noi up anh): de "Tu dong" = freeimage.host -> ImgBB -> Cloudflare R2. Noi nao hong thi tool
+     tu chuyen sang noi sau (noi o cuoi chi dung khi cac noi truoc deu hong). ImgBB: lay key mien phi o api.imgbb.com,
+     dan vao o "Key ImgBB". R2: dien tai khoan Cloudflare (khong bat buoc). Nut "Kiem tra ket noi" thu tung noi mot.
+
+3b. THEO DOI SAN PHAM (muc Cong cu, tren danh sach site)
+   - San pham tu vao danh sach khi tool ghi file CSV (chay xong / bam Xuat CSV): SKU, link, ngay list,
+     gia site + gia goc luc list, gia eBay tung size.
+   - "Nap file list cu": Excel / CSV (cot Profile + link) hoac .txt (ten file = Profile, moi dong 1 link).
+     Tool do lai du lieu luc list tu cac bang / file CSV da luu tren may; khong con thi lay moc o lan kiem tra dau.
+   - "Nap ket qua upload eBay": file eBay tra ve sau khi up CSV (hoac bao cao Active listings). Success -> da len eBay
+     + Item ID; Failure -> go khoi danh sach.
+   - "Kiem tra gia & ton kho": doc lai link tren site (chay song song duoc voi viec chay link). Tang gia > $2 to do,
+     giam gia chi bao, het hang -> "Xuat file Revise" dua so luong 0 (can Item ID).
+
+4. LUU Y
+   - Listing de Brand = Unbranded; tieu de co ten hang o dau (tat duoc trong Cai dat).
+   - Gia eBay = gia dang ban tren site x % (lam tron .99). Size/mau het hang bi bo (tat duoc trong Cai dat).
+     Rieng Hollister: tinh theo GIA GOC (khong lay gia sale, vi site nay hay sale 1-2 ngay roi ve gia cu).
+     Re chuot vao tab site khoang 1 giay de xem cach lay gia cua site do.
+   - Quan size W x L (vd 32W x 30L): tool co dinh 1 chieu dai = 32L (32L het sach moi lay 30L, roi 34L), khach chon vong eo W.
+     Quan Hollister size so (nu): mac dinh chi lay size 4-18 (size khac van tich them duoc o cua so Xem).
+   - eBay cho toi da 250 bien the, 24 anh / listing.
+   - Cung 1 link dang duoc cho nhieu acc (moi acc 1 listing); link trung trong cung 1 acc bi bo qua.
+
+Ho tro: Telegram @toibihoviai

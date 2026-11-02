@@ -1,0 +1,7 @@
+playwright
+curl_cffi
+pillow
+boto3
+openpyxl
+cryptography
+camoufox

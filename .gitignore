@@ -1,0 +1,28 @@
+# Chặn hết, chỉ cho phép mã nguồn — tránh lỡ đưa khoá / dữ liệu khách lên GitHub
+/*
+!/.gitignore
+!/*.py
+!/*.bat
+!/requirements.txt
+!/HUONG DAN.txt
+!/app.ico
+!/app.png
+!/sites/
+!/web/
+!/tests/
+
+# KHÔNG BAO GIỜ commit: khoá bí mật, key đã cấp, cài đặt, license
+keys/
+*.key
+*.pem
+*.pfx
+license.dat
+config.json
+config_*.json
+da_cap.csv
+.env*
+
+# Rác build / chạy
+__pycache__/
+*.pyc
+*.log

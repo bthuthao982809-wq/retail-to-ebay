@@ -1,0 +1,3182 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retail → eBay CSV</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2334d399'/%3E%3Cstop offset='.45' stop-color='%2310b981'/%3E%3Cstop offset='1' stop-color='%230891b2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cg transform='translate(4 4)' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 8.5h15l-1.2 11.2a1.5 1.5 0 0 1-1.5 1.3H7.2a1.5 1.5 0 0 1-1.5-1.3z'/%3E%3Cpath d='M8.8 8.5V7a3.2 3.2 0 0 1 6.4 0v1.5'/%3E%3Cpath d='M9.6 17.2l4.6-4.6M10.9 12.6h3.3v3.3'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --border: #e3e5e9; --input-border: #d4d7dd; --text: #1f2328; --muted: #6a717c;
+    --primary: #1f6feb; --primary-hover: #1a5fd0; --ok: #1a7f37; --warn: #9a6700; --err: #cf222e;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  main { max-width: 1360px; margin: 0 auto; padding: 22px 16px 48px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .top h1 { font-size: 20px; margin: 0; }
+  .top h1 span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; }
+  .lic { font-size: 12px; color: var(--muted); display: flex; gap: 14px; }
+  .lic a { color: var(--primary); text-decoration: none; }
+  .lic .warn { color: #b35900; } .lic .err { color: var(--err); font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .card > summary, .card-title { font-weight: 600; font-size: 15px; cursor: pointer; list-style: none; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
+  .card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::before { content: "▶"; font-size: 11px; }
+  details.card[open] > summary::before { content: "▼"; }
+  details.card:not([open]) > summary { margin-bottom: 0; }
+  .card-title { cursor: default; justify-content: space-between; }
+
+  label.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+  input[type=text], input[type=number], input[type=password], textarea, select {
+    width: 100%; border: 1px solid var(--input-border); border-radius: 8px; background: #fff; padding: 9px 12px; font: inherit; color: var(--text); outline: none; }
+  input[type=text], input[type=number], input[type=password], select { height: 40px; }
+  input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,111,235,.15); }
+  textarea { resize: vertical; }
+  input:disabled, textarea:disabled { background: #f3f4f6; color: #a0a6af; }
+  #links { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 12px; }
+  .sublabel { font-size: 13px; color: var(--muted); margin: 18px 0 8px; display: block; }
+  .sublabel b { color: var(--text); font-size: 14px; }
+  .small { font-size: 12px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .saved { color: var(--ok); font-size: 13px; }
+
+  /* ---- tab site */
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tabs button { height: 42px; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 600; background: #fff; border: 1px solid var(--border); color: var(--muted); display: inline-flex; align-items: center; gap: 8px; }
+  .tabs button .ico { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; flex: none; }
+  .tabs button:not(.on) .ico { opacity: .55; }
+  .tabs button.on { color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,111,235,.15); }
+  .tabs button .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite alternate; }
+  .tabs button .px { font-size: 10px; font-weight: 600; color: #8250df; border: 1px solid #d8c6f7; border-radius: 99px; padding: 0 6px; }
+  @keyframes pulse { from { opacity: .3; } to { opacity: 1; } }
+
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button, .btn { height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--input-border); background: #fff; color: var(--text); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  button:hover:not(:disabled), .btn:hover { background: #f3f4f6; }
+  button.primary, .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled), .btn.primary:hover { background: var(--primary-hover); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.mini { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+  label.btn input { display: none; }
+  .check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; user-select: none; }
+  .check input { width: 16px; height: 16px; accent-color: var(--primary); }
+  .banner { margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: #fff8c5; border: 1px solid #eed888; color: #5c4400; }
+  .pxinfo { font-size: 12px; color: var(--muted); }
+  .pxinfo b { color: #8250df; }
+
+  .import-box { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #f3f8ff; border: 1px solid #c8dcfb; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; font-size: 13px; }
+  .import-box[hidden] { display: none; }
+  #importWarn div { color: var(--warn); }
+
+  /* ---- bảng trong cài đặt */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .set-table input[type=text] { height: 32px; font-size: 13px; padding: 0 8px; border-radius: 6px; }
+  .set-table td { padding: 5px 6px; }
+  .set-table td.site { font-weight: 600; white-space: nowrap; }
+  .set-table .w-prefix { width: 110px; } .set-table .w-prefix input { min-width: 90px; } .set-table .w-pct { width: 90px; }  .rules td.kw { min-width: 260px; } .rules td.site { width: 150px; } .rules td.dept { width: 130px; } .rules td.cat { width: 110px; } .rules td.rm { width: 40px; }
+  .rules select { height: 32px; font-size: 13px; padding: 0 6px; border-radius: 6px; }
+  .host-box { border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .host-opts { display: flex; gap: 10px; flex-wrap: wrap; }
+  .host-opt { flex: 1 1 240px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; border: 1px solid var(--input-border); border-radius: 8px; padding: 10px 12px; }
+  .host-opt:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,111,235,.12); }
+  .host-opt input { margin-top: 3px; accent-color: var(--primary); }
+  .host-opt b { display: block; font-size: 14px; } .host-opt small { color: var(--muted); font-size: 12px; }
+  .host-box .row { margin-top: 12px; }
+  .stat.ok { color: var(--ok); } .stat.err { color: var(--err); } .stat.warn { color: #b45309; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ---- bảng kết quả */
+  .progress { height: 6px; background: #eef0f3; border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
+  .progress > div { height: 100%; width: 0; background: var(--primary); transition: width .3s; }
+  .bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fafbfc; font-size: 13px; }
+  .bulk input { height: 32px; font-size: 13px; }
+  #bulkProfile { width: 150px; } #bulkCountry { width: 56px; text-align: center; text-transform: uppercase; } #bulkCategory { width: 110px; }
+  .bulk button { height: 32px; }
+  .table-wrap { max-height: max(340px, calc(100vh - 480px)); overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .table-wrap thead th { position: sticky; top: 0; background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--border); }
+  td.num { width: 32px; color: var(--muted); }
+  td.img { width: 72px; }
+  td.img img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+  td.sku { width: 130px; font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
+  td.status { width: 110px; font-size: 13px; }
+  td.var { width: 170px; font-size: 12px; }
+  td.var b { font-size: 13px; }
+  .title-wrap { display: flex; gap: 8px; align-items: center; }
+  .title-wrap input { height: 34px; }
+  .count { font-size: 12px; color: var(--muted); min-width: 38px; text-align: right; }
+  .count.over { color: var(--err); font-weight: 600; }
+  .st-ok { color: var(--ok); } .st-err { color: var(--err); } .st-run { color: var(--primary); }
+  .src { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .src a { color: var(--muted); }
+  .title-wrap input.over { border-color: var(--err); background: #fff1f0; }
+  .title-wrap .ai-fix { flex: none; white-space: nowrap; border-color: #d8c6f7; color: #8250df; }
+  .ai-tag { margin-left: 8px; color: #8250df; font-weight: 600; cursor: help; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+  td.acc { width: 170px; }
+  .acc .accrow { display: flex; gap: 4px; }
+  .acc input { height: 30px; font-size: 12px; padding: 0 6px; border-radius: 6px; }
+  .acc input.pf { flex: 1; min-width: 0; }
+  .acc input.cc { width: 42px; text-align: center; flex: none; text-transform: uppercase; }
+  .acc input.bad, td.cat input.bad { border-color: var(--err); background: #fff1f0; }
+  td.cat { width: 120px; }
+  td.cat input { height: 30px; font-size: 12px; padding: 0 6px; border-radius: 6px; }
+  td.cat .hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  td.sel, th.sel { width: 28px; text-align: center; }
+  td.sel input, th.sel input { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+  tr.picked td { background: #f3f8ff; }
+  td.act { width: 64px; } td.act button { height: 32px; padding: 0 12px; }
+  .conflict { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #fff1f0; border: 1px solid #ffcecb; color: var(--err); font-size: 13px; }
+  .out-info { margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+  .out-info b { color: var(--text); font-weight: 600; }
+  .out-info .pending { color: var(--warn); font-weight: 600; }
+  .out-info .err { color: var(--err); }
+
+  #log { margin: 0; max-height: 340px; overflow: auto; background: #0d1117; color: #d1d7e0; border-radius: 8px; padding: 12px; font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; }
+  #log .ok { color: #56d364; } #log .warn { color: #e3b341; } #log .err { color: #f85149; } #log .t { color: #6e7681; }
+
+  /* ---- xem trước listing */
+  .modal { position: fixed; inset: 0; background: rgba(15, 20, 30, .55); display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; overflow-y: auto; z-index: 10; }
+  .modal[hidden] { display: none; }
+  .sheet { background: #fff; border-radius: 14px; width: 100%; max-width: 1080px; padding: 22px 24px 28px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .sheet .close { position: absolute; top: 12px; right: 12px; height: 34px; width: 34px; padding: 0; justify-content: center; }
+  .sheet .nav { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .pv { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; }
+  .pv-img img.main { width: 100%; aspect-ratio: 1; object-fit: contain; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  .pv-thumbs { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .pv-thumbs button { width: 58px; height: 58px; padding: 2px; border-radius: 8px; background: #fff; justify-content: center; }
+  .pv-thumbs button.on { border: 2px solid var(--text); }
+  .pv-thumbs img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .pv-info h2 { font-size: 21px; line-height: 1.3; margin: 0 0 6px; font-weight: 600; }
+  .pv-info .cond { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .pv-info .price { font-size: 26px; font-weight: 700; margin: 4px 0 2px; }
+  .pv-info .srcprice { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .pv-info .lbl { font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { height: 32px; min-width: 44px; justify-content: center; border-radius: 99px; font-size: 13px; padding: 0 12px; }
+  .chips button.on { border: 2px solid var(--text); font-weight: 600; }
+  .chips button.na { color: #a0a6af; text-decoration: line-through; }
+  .meta { margin-top: 16px; font-size: 13px; color: var(--muted); display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
+  .meta b { color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
+  .meta a { color: var(--primary); overflow-wrap: anywhere; }
+  .sheet h3 { font-size: 16px; margin: 24px 0 10px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .specs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 28px; font-size: 13px; }
+  .specs div { display: grid; grid-template-columns: 140px 1fr; }
+  .specs span { color: var(--muted); }
+  .specs.edit div { grid-template-columns: 160px 1fr; align-items: center; }
+  .specs.edit input { height: 30px; font-size: 13px; padding: 0 8px; border-radius: 6px; }
+  .specs.edit .req { color: var(--text); font-weight: 600; }
+  .specs.edit .req::after { content: " *"; color: var(--err); }
+  .specs.edit input.miss { border-color: var(--err); background: #fff1f0; }
+  .specs.edit input.axis { background: #f3f4f6; color: var(--muted); }
+  .desc { font-size: 14px; line-height: 1.6; } .desc p { margin: 0 0 10px; } .desc ul { margin: 0 0 10px; padding-left: 20px; }
+  .vtable { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+  .vtable td, .vtable th { padding: 5px 8px; }
+  .vtable td.q0 { color: var(--err); }
+  .vtable { max-height: 420px; }
+  .vs-adv { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); }
+  tr.pickable { cursor: pointer; user-select: none; }
+  .chips button { user-select: none; }
+  .vs-adv > summary { cursor: pointer; list-style: none; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .vs-adv > summary::-webkit-details-marker { display: none; }
+  .vs-adv > summary::before { content: "▶"; font-size: 10px; color: var(--muted); }
+  .vs-adv[open] > summary::before { content: "▼"; }
+  .flt-box { border: 1px solid #c8dcfb; background: #f6f9ff; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
+  .flt-box[hidden] { display: none; }
+  .photo-box { border: 1px solid var(--border); background: #fafbfc; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; }
+  .photo-box .progress { margin: 8px 0; }
+  .photo-box .progress > div.warn { background: #d4a72c; }
+  .photo-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .photo-head .grow { flex: 1; }
+  .photo-thumbs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .photo-thumbs .ph { position: relative; width: 52px; height: 52px; border: 2px solid var(--border); border-radius: 8px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .photo-thumbs .ph img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .photo-thumbs .ph.wait, .photo-thumbs .ph.skip { opacity: .4; }
+  .photo-thumbs .ph.run { border-color: var(--primary); animation: phpulse 1s ease-in-out infinite; }
+  .photo-thumbs .ph.ok { border-color: var(--ok); }
+  .photo-thumbs .ph.fail { border-color: var(--err); }
+  .photo-thumbs .ph b { position: absolute; right: 0; bottom: 0; min-width: 16px; height: 16px; line-height: 16px; text-align: center; font-size: 11px; color: #fff; border-top-left-radius: 6px; }
+  .photo-thumbs .ph.ok b { background: var(--ok); }
+  .photo-thumbs .ph.fail b { background: var(--err); }
+  @keyframes phpulse { 50% { opacity: .55; } }
+  img.main.loading { opacity: .55; transition: opacity .2s; }
+  .pi-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-top: 18px; }
+  .pi-box[hidden] { display: none; }
+  .pi-card .q0 { color: #b42318; }
+  .pi-card .st-ok { color: #15803d; }
+  .title-groups { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 4px; }
+  .title-groups[hidden] { display: none; }
+  .title-groups .tg { border-radius: 99px; }
+  .title-groups .tg.on { background: var(--text); color: #fff; border-color: var(--text); }
+  .title-groups .tg.warn { color: #b45309; border-color: #f0c36d; background: #fffbeb; }
+  .title-groups .tg.warn.on { background: #b45309; color: #fff; }
+  .src .add-tag { margin-left: 8px; font-size: 11px; color: var(--muted); }
+  .src .warn-tag { margin-left: 8px; font-size: 11px; color: #b45309; font-weight: 600; cursor: help; }
+  a.page-items { font-size: 12px; color: #b45309; text-decoration: none; white-space: nowrap; }
+  a.page-items:hover { text-decoration: underline; }
+  .pi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 8px; }
+  .pi-card { border: 1px solid var(--border); border-radius: 8px; padding: 6px; cursor: pointer; user-select: none;
+             font-size: 12px; line-height: 1.35; background: #fff; position: relative; }
+  .pi-card img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f3f4f6; border-radius: 4px; display: block; }
+  .pi-card.on { border: 2px solid #2563eb; padding: 5px; background: #f6f9ff; }
+  .pi-card.done { opacity: .55; cursor: default; }
+  .pi-card .tag { position: absolute; top: 10px; left: 10px; background: #111827; color: #fff; border-radius: 4px;
+                  padding: 1px 6px; font-size: 11px; }
+  .pi-card .nm { font-weight: 600; margin-top: 4px; }
+  .flt-head { margin-bottom: 4px; }
+  .flt { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; margin: 8px 0; }
+  .flt-lbl { font-size: 13px; color: var(--muted); }
+  .flt .chips button { border-radius: 6px; }
+  .flt .chips button.on { background: var(--text); color: #fff; border-color: var(--text); }
+  .flt .chips button.all { border-style: dashed; }
+  #fltTitle b { font-weight: 600; } #fltTitle .ext { color: #8250df; font-weight: 600; }
+  #fltTitle .over { color: var(--err); font-size: 12px; margin-left: 6px; }
+  .vtable tr.vgroup td { background: #f6f8fa; padding-top: 7px; padding-bottom: 7px; }
+  .vtable tr.off td:not(.sel) { color: #a0a6af; }
+  .vtable td.sel input { width: 16px; height: 16px; accent-color: var(--primary); }
+  #vsSave.pending { box-shadow: 0 0 0 3px rgba(212,167,44,.4); }
+  .pv-err { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #fff1f0; border: 1px solid #ffcecb; color: var(--err); font-size: 13px; }
+  @media (max-width: 860px) { .pv { grid-template-columns: 1fr; } .specs { grid-template-columns: 1fr; } }
+
+  /* ================= Bố cục mới: cột site bên trái, nội dung bên phải, cài đặt trong cửa sổ riêng */
+  .app { display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 100vh; }
+  .side { position: sticky; top: 0; height: 100vh; background: #fff; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 16px 12px; gap: 6px; }
+  .brand { display: flex; gap: 10px; align-items: center; padding: 2px 6px 14px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .brand .logo { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #1f6feb, #8250df); color: #fff;
+    display: grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+  .brand b { display: block; font-size: 15px; } .brand small { color: var(--muted); font-size: 12px; }
+  .side-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 4px 8px; }
+  .tabs { flex-direction: column; flex-wrap: nowrap; gap: 2px; margin: 0; overflow-y: auto; flex: 1; }
+  .tabs button { width: 100%; height: 40px; border: 1px solid transparent; background: transparent; justify-content: flex-start;
+    padding: 0 8px; font-weight: 500; font-size: 14px; color: var(--text); box-shadow: none; }
+  .tabs button:hover:not(:disabled) { background: #f3f4f6; }
+  .tabs button.on { background: #eef4ff; border-color: #c8dcfb; color: var(--primary); font-weight: 600; box-shadow: none; }
+  .tabs button:not(.on) .ico { opacity: .75; }
+  .tabs button .px { margin-left: auto; }
+  .tabs button .dot { margin-left: 6px; }
+  .side-foot { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .side-btn { width: 100%; justify-content: center; font-weight: 600; }
+  .side .lic { flex-direction: column; gap: 2px; padding: 0 4px; }
+
+  main { max-width: 1400px; margin: 0; padding: 20px 24px 48px; width: 100%; }
+  .top { align-items: center; margin-bottom: 16px; }
+  .top h1 { font-size: 22px; }
+  .page-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .page-sub b { color: var(--text); font-weight: 600; }
+  .top-toggles { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; background: #fff; border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 14px; }
+
+  .pct-box { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .pct-box input { width: 72px; height: 30px; padding: 0 8px; font-weight: 600; text-align: right; }
+  /* công tắc bật/tắt */
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 13px; }
+  .switch input { display: none; }
+  .switch span { width: 34px; height: 20px; border-radius: 99px; background: #d0d4da; position: relative; transition: background .15s; flex: none; }
+  .switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: left .15s; }
+  .switch input:checked + span { background: var(--primary); }
+  .switch input:checked + span::after { left: 16px; }
+
+  .card-title { margin-bottom: 12px; }
+  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff;
+    font-size: 12px; font-weight: 700; margin-right: 6px; }
+  .actions { margin-top: 12px; }
+  button.big { height: 42px; padding: 0 22px; font-size: 15px; }
+  button.ghost, .btn.ghost { background: transparent; }
+  .sep { width: 1px; height: 26px; background: var(--border); margin: 0 4px; }
+
+  .chips-sum { display: flex; gap: 6px; flex-wrap: wrap; font-weight: 500; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: #fafbfc; color: var(--muted); cursor: default; }
+  .chip.ok { background: #dafbe1; border-color: #aceebb; color: #116329; }
+  .chip.warn { background: #fff8c5; border-color: #eed888; color: #7d4e00; }
+  .chip.err { background: #ffebe9; border-color: #ffcecb; color: #a40e26; }
+  #summary .chip.click { cursor: pointer; }
+  /* việc tab đang làm sau khi chạy xong link (kiểm ảnh x/y, AI, ghi CSV) */
+  .phase { margin-left: 10px; font-size: 12px; font-weight: 600; color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe;
+    border-radius: 99px; padding: 2px 10px; }
+  .phase::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%;
+    background: currentColor; vertical-align: 1px; animation: phase-blink 1s ease-in-out infinite; }
+  @keyframes phase-blink { 50% { opacity: .25; } }
+  #summary .chip.on { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .bulk .bulk-count { color: var(--muted); }
+  .bulk .bulk-count b { color: var(--text); }
+
+  table.results tbody tr:hover td { background: #f8fafc; }
+  table.results tbody tr.picked td { background: #eef4ff; }
+  table.results tbody tr.has-problem td:first-child { box-shadow: inset 3px 0 0 #d4a72c; }
+  table.results tbody tr.has-error td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+  .th-note { font-weight: 400; color: #9aa1ab; }
+  table.results td.sku { width: 110px; font-size: 11px; color: var(--muted); }
+  table.results td.title-cell { min-width: 300px; }
+  table.results td.status { width: 150px; }
+  table.results td.var { width: 150px; }
+  .st-warn { color: var(--warn); font-weight: 600; }
+  .st-ok { font-weight: 600; }
+  .st-detail { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+  .st-detail.warn { color: #9a6700; }
+  .table-wrap { max-height: max(380px, calc(100vh - 380px)); }
+
+  /* cửa sổ cài đặt */
+  .settings-sheet { max-width: 1060px; padding: 0; display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+  #settingsModal { align-items: center; padding: 24px 16px; }
+  .set-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; border-bottom: 1px solid var(--border); }
+  .set-head h2 { margin: 0; font-size: 18px; }
+  .set-head .close { position: static; }
+  .set-body { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 0; flex: 1; }
+  .set-nav { border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+  .set-nav a { padding: 8px 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; }
+  .set-nav a:hover { background: #f3f4f6; }
+  .set-nav a.on { background: #eef4ff; color: var(--primary); font-weight: 600; }
+  .set-content { overflow-y: auto; padding: 6px 24px 24px; scroll-behavior: smooth; }
+  .set-sec { padding: 16px 0 20px; border-bottom: 1px solid var(--border); }
+  .set-sec:last-child { border-bottom: 0; }
+  .set-sec h3 { margin: 0 0 6px; font-size: 16px; }
+  .set-sec h4 { margin: 20px 0 4px; font-size: 14px; }
+  .set-sec .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .set-sec .grid { grid-template-columns: repeat(3, 1fr); }
+  .px-head { margin-bottom: 6px; }
+  .px-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; margin-bottom: 10px;
+    padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: #fafbfc; min-height: 40px; }
+  .px-list:empty::before { content: "Chưa có proxy nào"; color: var(--muted); font-size: 13px; }
+  .px-item { display: inline-flex; align-items: center; gap: 6px; font: 12px Consolas, monospace; background: #fff;
+    border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px 3px 8px; }
+  .px-item button { height: 20px; width: 20px; padding: 0; justify-content: center; font-size: 11px; border-radius: 4px; border: 0; }
+  .px-item button:hover { background: #ffebe9; color: var(--err); }
+  .spx-row { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--border); }
+  .spx-row .nm { font-weight: 600; font-size: 14px; padding-top: 4px; }
+  .spx-row .nm small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+  .spx-row .px-list { max-height: none; margin: 0; }
+  .spx-res { width: 100%; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .spx-add { margin-top: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: 8px; background: #fafbfc; }
+  button.danger-text { color: var(--err); }
+  .set-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 12px 22px; border-top: 1px solid var(--border); background: #fafbfc; border-radius: 0 0 14px 14px; }
+
+  @media (max-width: 960px) {
+    .app { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; }
+    .tabs { flex-direction: row; flex-wrap: wrap; }
+    .tabs button { width: auto; }
+    .set-body { grid-template-columns: 1fr; }
+    .set-nav { display: none; }
+    .set-sec .grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* =====================================================================================
+     GIAO DIỆN "APP" — lớp phủ cuối: chỉ đổi phần hiển thị, không đổi chức năng
+     ===================================================================================== */
+  :root {
+    --bg: #f4f6fb; --card: #ffffff; --border: #e6e9f0; --input-border: #d5dae3; --text: #111827; --muted: #6b7280;
+    --primary: #4f46e5; --primary-hover: #4338ca; --primary-soft: #eef2ff; --primary-ring: rgba(79, 70, 229, .18);
+    --ok: #059669; --ok-soft: #ecfdf5; --warn: #b45309; --warn-soft: #fffbeb; --err: #dc2626; --err-soft: #fef2f2;
+    --side: #0f172a; --side-2: #1e293b; --side-text: #cbd5e1; --side-muted: #64748b;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05); --shadow: 0 1px 3px rgba(16, 24, 40, .06), 0 1px 2px rgba(16, 24, 40, .04);
+    --shadow-lg: 0 24px 48px -12px rgba(16, 24, 40, .25);
+    --radius: 14px;
+  }
+  body { font: 14px/1.5 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--bg); -webkit-font-smoothing: antialiased; letter-spacing: -.003em; }
+  ::selection { background: #c7d2fe; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: #cbd2dd; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+  *::-webkit-scrollbar-thumb:hover { background-color: #aab3c2; }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---- cột trái tối */
+  .app { grid-template-columns: 248px minmax(0, 1fr); }
+  .side { background: linear-gradient(180deg, var(--side) 0%, #111c33 100%); border-right: 0; padding: 18px 12px 14px; color: var(--side-text); }
+  .brand { border-bottom: 1px solid rgba(255,255,255,.07); padding: 2px 8px 16px; margin-bottom: 12px; }
+  .brand .logo { width: 40px; height: 40px; border-radius: 12px; font-size: 12px; letter-spacing: -.02em;
+    background: linear-gradient(135deg, #34d399 0%, #10b981 45%, #0891b2 100%); box-shadow: 0 6px 16px rgba(16,185,129,.35); }
+  .brand b { color: #fff; font-size: 15px; letter-spacing: -.01em; }
+  .brand small { color: var(--side-muted); }
+  .side-label { color: var(--side-muted); font-size: 10.5px; letter-spacing: .1em; padding: 6px 10px 6px; }
+  .tabs { gap: 2px; padding: 2px 8px 4px 0; overflow-x: hidden; }
+  .tabs::-webkit-scrollbar-thumb { background-color: #334155; }
+  .tabs button { height: 40px; border-radius: 10px; color: var(--side-text); font-weight: 500; font-size: 13.5px; gap: 10px; padding: 0 10px;
+    border: 0; position: relative; transition: background .12s, color .12s; }
+  .tabs button:hover:not(:disabled) { background: rgba(255,255,255,.06); color: #fff; }
+  .tabs button.on { background: rgba(99,102,241,.18); color: #fff; font-weight: 600; border: 0; }
+  .tabs button.on::before { content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: #818cf8; }
+  .tabs button .ico { width: 26px; height: 26px; border-radius: 8px; font-size: 10.5px; letter-spacing: -.02em; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  .tabs button:not(.on) .ico { opacity: .85; }
+  .tabs button .px { color: #c4b5fd; border-color: rgba(196,181,253,.35); }
+  .tabs button .dot { background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.2); }
+  /* rê chuột: dòng site sáng lên, nhích nhẹ sang phải, icon nổi lên */
+  .tabs button { transition: background .18s ease, color .18s ease, transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s ease; will-change: transform; }
+  .tabs button .ico { transition: transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s ease, opacity .18s ease; }
+  .tabs button:hover:not(:disabled) { background: linear-gradient(90deg, rgba(255,255,255,.11), rgba(255,255,255,.04));
+    transform: translateX(3px); box-shadow: 0 4px 14px rgba(0,0,0,.22), inset 0 0 0 1px rgba(255,255,255,.07); }
+  .tabs button:hover:not(:disabled) .ico { transform: scale(1.12) rotate(-3deg); opacity: 1;
+    box-shadow: 0 4px 10px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.22); }
+  .tabs button.on:hover:not(:disabled) { background: linear-gradient(90deg, rgba(99,102,241,.32), rgba(99,102,241,.14)); }
+  .tabs button:active:not(:disabled) { transform: translateX(3px) scale(.985); }
+  .tabs button:focus-visible { outline: 2px solid #818cf8; outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) { .tabs button, .tabs button .ico { transition: background .01s, color .01s; }
+    .tabs button:hover:not(:disabled), .tabs button:hover:not(:disabled) .ico { transform: none; } }
+  .side-foot { border-top: 1px solid rgba(255,255,255,.07); padding-top: 12px; }
+  .side-btn { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); color: #e2e8f0; height: 40px; border-radius: 10px; }
+  .side-btn:hover:not(:disabled) { background: rgba(255,255,255,.12) !important; color: #fff; }
+  .side .lic { color: var(--side-muted); }
+  .side .lic a { color: #a5b4fc; }
+
+  /* ---- thanh trên cùng */
+  main { padding: 0 28px 48px; max-width: 1480px; }
+  .top { position: sticky; top: 0; z-index: 5; margin: 0 -28px 20px; padding: 16px 28px 14px; background: rgba(244,246,251,.86);
+    backdrop-filter: saturate(160%) blur(10px); border-bottom: 1px solid var(--border); }
+  .top h1 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .page-sub { font-size: 12.5px; }
+  .page-sub a { color: var(--primary); }
+  .top-toggles { gap: 18px; padding: 6px 8px 6px 14px; border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .pct-box { font-weight: 500; color: #374151; }
+  .pct-box input { width: 70px; height: 32px; border-radius: 8px; font-size: 14px; background: var(--primary-soft); border-color: #c7d2fe; color: var(--primary); }
+  .switch { color: #374151; font-weight: 500; }
+  .switch span { width: 36px; height: 21px; background: #d1d5db; }
+  .switch span::after { width: 17px; height: 17px; }
+  .switch input:checked + span::after { left: 17px; }
+  .pxinfo { padding: 4px 10px; border-radius: 8px; background: #f8fafc; border: 1px solid var(--border); }
+
+  /* ---- số liệu tổng quan */
+  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+    display: flex; gap: 12px; align-items: center; min-width: 0; }
+  .kpi .k-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; flex: none; }
+  .kpi .k-val { font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .kpi .k-lbl { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi.all .k-ico { background: var(--primary-soft); color: var(--primary); }
+  .kpi.ok .k-ico { background: var(--ok-soft); color: var(--ok); }
+  .kpi.warn .k-ico { background: var(--warn-soft); color: var(--warn); }
+  .kpi.err .k-ico { background: var(--err-soft); color: var(--err); }
+  .kpi.acc .k-ico { background: #f5f3ff; color: #7c3aed; }
+  .kpi.warn .k-val { color: var(--warn); } .kpi.err .k-val { color: var(--err); }
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+  /* ---- thẻ */
+  .card { border-radius: var(--radius); border-color: var(--border); padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 18px; }
+  .card-title { font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin-bottom: 14px; }
+  .step { width: 26px; height: 26px; border-radius: 8px; background: var(--primary-soft); color: var(--primary); font-size: 12.5px; margin-right: 8px; }
+  details.card > summary { font-weight: 650; }
+  details.card > summary::before { content: "›"; font-size: 18px; line-height: 1; color: var(--muted); display: inline-block; transition: transform .15s; }
+  details.card[open] > summary::before { content: "›"; transform: rotate(90deg); }
+
+  /* ---- ô nhập, nút */
+  input[type=text], input[type=number], input[type=password], textarea, select { border-radius: 10px; border-color: var(--input-border);
+    transition: border-color .12s, box-shadow .12s; }
+  input:hover:not(:disabled):not(:focus), textarea:hover:not(:focus) { border-color: #b8c0cd; }
+  input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-ring); }
+  #links { background: #fbfcfe; border-radius: 12px; padding: 12px 14px; line-height: 1.6; min-height: 92px; }
+  button, .btn { border-radius: 10px; border-color: var(--input-border); font-weight: 500; transition: background .12s, border-color .12s, box-shadow .12s, transform .05s; }
+  button:hover:not(:disabled), .btn:hover { background: #f5f7fa; border-color: #c3cad6; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible, .btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--primary-ring); }
+  button.primary, .btn.primary { background: linear-gradient(180deg, #5b54ec 0%, var(--primary) 100%); border-color: var(--primary);
+    box-shadow: 0 1px 2px rgba(79,70,229,.3), inset 0 1px 0 rgba(255,255,255,.15); }
+  button.primary:hover:not(:disabled), .btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  button.big { height: 44px; padding: 0 24px; border-radius: 11px; font-size: 14.5px; }
+  button.mini { border-radius: 8px; }
+  #stop:not(:disabled) { color: var(--err); border-color: #fecaca; background: var(--err-soft); }
+  #retryBtn { color: var(--warn); border-color: #fde68a; background: var(--warn-soft); }
+  .sep { background: var(--border); height: 28px; }
+  .import-box { background: var(--primary-soft); border-color: #c7d2fe; border-radius: 12px; }
+  .banner { border-radius: 12px; }
+
+  /* ---- tóm tắt, nhóm tiêu đề */
+  .chip { padding: 4px 11px; font-weight: 600; font-size: 12px; }
+  .chip.ok { background: var(--ok-soft); border-color: #a7f3d0; color: #047857; }
+  .chip.warn { background: var(--warn-soft); border-color: #fde68a; color: #92400e; }
+  .chip.err { background: var(--err-soft); border-color: #fecaca; color: #b91c1c; }
+  .progress { height: 6px; background: #eceff5; margin-bottom: 14px; }
+  .progress > div { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+  .title-groups { padding: 10px 12px; border: 1px dashed #d6dbe5; border-radius: 12px; background: #fbfcfe; margin: 0 0 12px; }
+  .title-groups .tg { height: 28px; background: #fff; }
+  .title-groups .tg.on { background: var(--primary); border-color: var(--primary); }
+  .bulk { border-radius: 12px; background: #fbfcfe; padding: 8px 12px; border-color: var(--border); }
+  .bulk input { border-radius: 8px; }
+  .bulk button { border-radius: 8px; }
+  #aiBtn { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
+
+  /* ---- bảng kết quả */
+  .table-wrap { border-radius: 12px; border-color: var(--border); background: #fff; }
+  table.results thead th { background: #f8fafc; color: #6b7280; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+    padding: 10px 8px; border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 var(--border); }
+  table.results .th-note { text-transform: none; letter-spacing: 0; }
+  table.results td { padding: 10px 8px; border-bottom: 1px solid #eef1f5; }
+  table.results tbody tr:last-child td { border-bottom: 0; }
+  table.results tbody tr:hover td { background: #fafbff; }
+  table.results tbody tr.picked td { background: var(--primary-soft); }
+  td.img img { width: 60px; height: 60px; border-radius: 10px; border-color: #edf0f4; background: #fff; }
+  td.num { color: #9ca3af; font-variant-numeric: tabular-nums; }
+  table.results td.sku { color: #6b7280; font-family: "Cascadia Mono", Consolas, monospace; }
+  table.results td.sku.copyable { cursor: pointer; border-radius: 6px; transition: background .12s, color .12s; }
+  table.results td.sku.copyable:hover { background: #e6f1fb; color: #185fa5; }
+  table.results td.sku.copied { background: #dcfce7; color: #166534; }
+  .title-wrap input { height: 36px; border-radius: 9px; font-weight: 500; }
+  .count { font-variant-numeric: tabular-nums; }
+  .src a { color: #6b7280; text-decoration: none; border-bottom: 1px dotted #c3c9d4; }
+  .src a:hover { color: var(--primary); border-color: var(--primary); }
+  .acc input, td.cat input { border-radius: 8px; }
+  td.act button { border-radius: 9px; font-weight: 600; color: var(--primary); border-color: #c7d2fe; background: var(--primary-soft); }
+  td.act button:hover:not(:disabled) { background: #e0e7ff !important; }
+  /* trạng thái dạng nhãn */
+  .st-ok, .st-warn, .st-err, .st-run { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px;
+    font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .st-ok { background: var(--ok-soft); color: #047857; }
+  .st-warn { background: var(--warn-soft); color: #92400e; }
+  .st-err { background: var(--err-soft); color: #b91c1c; white-space: normal; border-radius: 10px; }
+  .st-run { background: var(--primary-soft); color: var(--primary); }
+  .st-run::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent;
+    animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .st-detail { margin-top: 4px; }
+  .empty { padding: 48px 0; font-size: 14px; }
+  .conflict { border-radius: 12px; }
+  .conflict button { margin-left: 8px; height: 28px; padding: 0 10px; font-size: 13px; }
+  .conflict.info { background: var(--primary-soft); border-color: #c7d2fe; color: var(--primary); }
+  .conflict.done { background: var(--ok-soft); border-color: #a7f3d0; color: var(--ok); }
+  td.cat button.mini { margin-top: 4px; height: 24px; padding: 0 8px; font-size: 12px; }
+  .out-info { background: #fbfcfe; border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
+  .out-info:empty { display: none; }
+  #log { border-radius: 12px; background: #0b1220; }
+
+  /* ---- cửa sổ (Xem / Cài đặt) */
+  .modal { background: rgba(15, 23, 42, .55); backdrop-filter: blur(3px); }
+  .sheet { border-radius: 18px; box-shadow: var(--shadow-lg); }
+  .sheet .close { border-radius: 10px; }
+  .flt-box { border-color: #c7d2fe; background: linear-gradient(180deg, #f5f7ff, #fbfcff); border-radius: 14px; }
+  .flt .chips button.on, .chips button.on { border-color: var(--primary); }
+  .flt .chips button.on { background: var(--primary); }
+  .pv-img img.main { border-radius: 14px; border-color: #edf0f4; }
+  .pv-thumbs button { border-radius: 10px; }
+  .pv-thumbs button.on { border: 2px solid var(--primary); }
+  .pv-info .price { color: #111827; letter-spacing: -.02em; }
+  .pi-card { border-radius: 12px; }
+  .pi-card.on { border-color: var(--primary); background: var(--primary-soft); }
+  .set-head { padding: 18px 24px; }
+  .set-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+  .set-nav a { border-radius: 10px; }
+  .set-nav a.on { background: var(--primary-soft); color: var(--primary); }
+  .set-foot { border-radius: 0 0 18px 18px; }
+  .host-opt { border-radius: 12px; }
+  .host-opt:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-ring); }
+
+  /* Font Inter đóng gói sẵn trong web/fonts (không tải từ Google: mở app không phải chờ mạng) */
+  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/fonts/inter-vietnamese.woff2) format('woff2'); unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB; }
+  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/fonts/inter-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/fonts/inter-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  /* ---- Hộp thông báo / hỏi lại theo giao diện tool */
+  .ui-ov { position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; padding: 20px; animation: uiFade .12s ease-out; }
+  .ui-dlg { background: #fff; border-radius: 16px; width: 100%; max-width: 460px; max-height: calc(100vh - 40px); display: flex;
+    flex-direction: column; box-shadow: 0 24px 60px rgba(15, 23, 42, .28); overflow: hidden; animation: uiPop .16s cubic-bezier(.2,.8,.2,1); }
+  .ui-dlg.wide { max-width: 540px; }
+  .ui-hd { display: flex; gap: 12px; align-items: flex-start; padding: 18px 20px 6px; }
+  .ui-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; font-weight: 700; flex: none;
+    background: var(--primary-soft); color: var(--primary); }
+  .ui-ic.ok { background: var(--ok-soft); color: var(--ok); } .ui-ic.warn { background: var(--warn-soft); color: var(--warn); }
+  .ui-ic.err { background: var(--err-soft); color: var(--err); }
+  .ui-ttl { font-size: 16px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+  .ui-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .ui-x { margin-left: auto; border: 0; background: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 2px 4px; }
+  .ui-body { padding: 4px 20px 16px 72px; font-size: 13.5px; line-height: 1.55; color: var(--text); overflow-y: auto; }
+  .ui-body p { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; } .ui-body ul { margin: 0 0 8px; padding-left: 18px; }
+  .ui-body li { margin: 2px 0; overflow-wrap: anywhere; }
+  .ui-ft { display: flex; align-items: center; gap: 8px; justify-content: flex-end; padding: 12px 20px; background: #f8fafc; border-top: 1px solid #eef0f4; }
+  .ui-ft .hint { margin-right: auto; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .ui-ft button { min-width: 84px; }
+  @keyframes uiFade { from { opacity: 0; } } @keyframes uiPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+  /* hộp kết quả Nhập file tổng */
+  .imp-site { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
+  .imp-site .ico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-size: 10.5px; font-weight: 700; flex: none; }
+  .imp-site .nm { font-size: 14px; font-weight: 600; }
+  .imp-site .pf { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .imp-site .pf span { font-size: 11px; background: #f1f5f9; color: #475569; border-radius: 99px; padding: 1px 8px; }
+  .imp-site .n { margin-left: auto; text-align: right; font-size: 18px; font-weight: 700; color: var(--primary); line-height: 1; }
+  .imp-site .n small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+  .imp-site .go { font-size: 12px; color: var(--primary); border: 1px solid #c7d2fe; background: var(--primary-soft); border-radius: 8px;
+    padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+  .imp-skip { padding: 10px 12px; border-radius: 12px; background: #fff7ed; border: 1px solid #fed7aa; font-size: 12.5px; color: #9a3412; }
+  .imp-skip div { margin-top: 3px; }
+  .gdot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.18); flex: none; }
+  /* ---- chú thích tab site (rê chuột ~0,7 giây mới hiện) */
+  .tab-tip { position: fixed; z-index: 40; width: 270px; background: #fff; color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(15,23,42,.18); font-size: 12.5px; line-height: 1.5;
+    pointer-events: none; animation: tipIn .15s ease-out; }
+  .tab-tip b.t { display: block; font-size: 13.5px; margin-bottom: 6px; }
+  .tab-tip .f { display: inline-block; font-weight: 600; color: var(--primary); background: var(--primary-soft); border-radius: 8px; padding: 3px 8px; margin-bottom: 6px; }
+  .tab-tip .m { color: var(--muted); }
+  .tab-tip::before { content: ""; position: absolute; left: -6px; top: var(--arrow, 16px); width: 10px; height: 10px; background: #fff;
+    border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); transform: rotate(45deg); }
+  @keyframes tipIn { from { opacity: 0; transform: translateX(-4px); } }
+  /* ---- Nhập file tổng + tab có link chờ chạy */
+  .side-imp { display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; margin: 0 2px 12px; border-radius: 10px;
+    background: #4f46e5; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, transform .15s; }
+  .side-imp:hover { background: #6366f1; transform: translateY(-1px); }
+  .tabs button .cnt { margin-left: auto; font-size: 11px; font-weight: 600; color: #a5b4fc; border: 1px solid rgba(165,180,252,.4);
+    border-radius: 99px; padding: 0 7px; line-height: 17px; }
+  .tabs button .pdot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; flex: none; margin-left: 6px;
+    animation: pdot 1.2s ease-in-out infinite; }
+  @keyframes pdot { 0%,100% { box-shadow: 0 0 0 0 rgba(52,211,153,.7); opacity: 1; } 50% { box-shadow: 0 0 0 5px rgba(52,211,153,0); opacity: .55; } }
+  /* ---- Theo dõi sản phẩm */
+  .tk-note { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+  #trackView .card-title { flex-wrap: wrap; gap: 10px; }
+  table.trk td.nw { white-space: nowrap; }
+  table.trk td:nth-child(3) { max-width: 360px; } table.trk .sub { overflow-wrap: anywhere; }
+  .tk-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .tk-tools select, .tk-tools input { height: 36px; width: auto; min-width: 150px; padding-top: 0; padding-bottom: 0; line-height: 34px; }
+  .tk-alias { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+  .tk-alias input { height: 28px; width: 80px; min-width: 0; padding: 0 8px; }
+  .tk-alias .chip b { cursor: pointer; margin-left: 4px; }
+  .tk-sel { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .tk-logbox { margin-top: 12px; } .tk-logbox summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .tk-logbox pre { max-height: 220px; overflow: auto; font-size: 12px; background: #f8fafc; padding: 8px 10px; border-radius: 8px; }
+  .tk-logbox pre .err { color: var(--err); } .tk-logbox pre .warn { color: var(--warn); } .tk-logbox pre .ok { color: var(--ok); }
+  .tk-tools input { width: 220px; }
+  .tk-flt { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .tk-flt .chip { cursor: pointer; }
+  .tk-flt .chip.on { outline: 2px solid var(--primary); outline-offset: 1px; }
+  table.trk { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.trk th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 9px 10px; }
+  table.trk td { padding: 9px 10px; border-top: 1px solid var(--border); vertical-align: top; }
+  table.trk tr.lst { cursor: pointer; }
+  table.trk tr.lst:hover td { background: #f8fafc; }
+  table.trk tr.var td { background: #fbfcfe; font-size: 12.5px; padding: 6px 10px; }
+  table.trk .sku { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  table.trk .sub { color: var(--muted); font-size: 12px; }
+  table.trk .chev { color: var(--muted); transition: transform .15s; display: inline-block; }
+  table.trk tr.open .chev { transform: rotate(90deg); }
+  .tk-link { display: block; font-size: 12px; color: var(--primary); margin-top: 2px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-up { color: var(--err); font-weight: 650; } .d-down { color: var(--ok); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 8.5h15l-1.2 11.2a1.5 1.5 0 0 1-1.5 1.3H7.2a1.5 1.5 0 0 1-1.5-1.3z"/><path d="M8.8 8.5V7a3.2 3.2 0 0 1 6.4 0v1.5"/><path d="M9.6 17.2l4.6-4.6M10.9 12.6h3.3v3.3"/></svg></span><div><b>Retail → eBay</b><small>xuất CSV theo từng acc</small></div></div>
+    <label class="side-imp" title="1 file Excel / CSV có link nhiều site: tool tự chia link về đúng tab từng site (theo cột Site; ô trống thì nhận theo link)">📥 Nhập file tổng (nhiều site)<input type="file" id="importAll" accept=".csv,.xlsx,.xlsm" hidden></label>
+    <div class="side-label">Công cụ</div>
+    <nav class="tabs" style="flex:none;margin-bottom:10px"><button id="trackTab" style="white-space:nowrap"><span class="ico" style="background:#0ea5e9">TD</span>Theo dõi sản phẩm</button></nav>
+    <div class="side-label">Site</div>
+    <nav class="tabs" id="tabs"></nav>
+    <div class="side-foot">
+      <button id="openSettings" class="side-btn">⚙ Cài đặt</button>
+      <div class="lic"><span id="licText"></span><span id="licSupport" hidden>Hỗ trợ: Telegram <a id="tgLink" target="_blank"></a></span></div>
+    </div>
+  </aside>
+
+  <main>
+   <div id="siteView">
+    <header class="top">
+      <div>
+        <h1 id="pageTitle">Retail → eBay CSV</h1>
+        <div class="page-sub" id="pageSub"></div>
+      </div>
+      <div class="top-toggles">
+        <label class="pct-box" title="Giá eBay = giá site × % này (riêng cho site đang mở)">Giá eBay
+          <input type="number" id="sitePct" min="50" max="500" step="1"> % giá site</label>
+        <label class="switch" title="Tải ảnh sản phẩm về, chỉnh chuẩn eBay rồi up lên host ảnh"><input type="checkbox" id="upload"><span></span> Up ảnh lên <b id="hostName">freeimage.host</b></label>
+        <label class="switch" title="Mặc định tắt: chạy IP gốc, bị chặn thì tự chuyển sang proxy. Bật = đi qua proxy ngay từ đầu"><input type="checkbox" id="useProxy"><span></span> Luôn đi qua proxy</label>
+        <span class="pxinfo" id="pxInfo"></span>
+      </div>
+    </header>
+
+    <div class="kpis" id="kpis"></div>
+
+    <section class="card">
+      <div class="card-title"><span><span class="step">1</span> <span id="linkTitle">Dán link sản phẩm</span> <span class="muted" id="linkCount"></span></span></div>
+      <textarea id="links" rows="3"></textarea>
+      <div class="import-box" id="importBox" hidden>
+        <div><b id="importName"></b> <span id="importSummary" class="muted"></span></div>
+        <div id="importWarn" class="small"></div>
+        <button id="importClear" class="mini">✕ Bỏ file import, dùng ô dán link</button>
+      </div>
+      <div class="row actions">
+        <button id="run" class="primary big">▶ Chạy</button>
+        <button id="stop" disabled>■ Dừng</button>
+        <button id="resumeBtn" class="primary big" hidden title="Chạy tiếp từ link đã dừng, giữ nguyên các dòng đã xong (nút ▶ Chạy bên cạnh sẽ chạy lại từ đầu theo ô dán link)">▶ Chạy tiếp</button>
+        <button id="retryBtn" hidden title="Chạy lại các dòng lỗi (site chặn tạm thời, mạng chập chờn…), giữ nguyên các dòng đã xong">↻ Chạy lại dòng lỗi</button>
+        <span class="sep"></span>
+        <label class="btn ghost">📄 Import Excel / CSV<input type="file" id="importFile" accept=".csv,.xlsx,.xlsm"></label>
+        <button id="makeTemplate" class="ghost">📋 File Excel mẫu</button>
+      </div>
+      <div id="busyBanner" class="banner" hidden></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">
+        <span><span class="step">2</span> Kiểm tra &amp; sửa <span class="muted" id="progressText"></span>
+          <span class="phase" id="phaseText" hidden></span></span>
+        <span class="chips-sum" id="summary"></span>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="title-groups" id="titleGroups" hidden></div>
+      <div class="bulk" id="bulkBar" hidden>
+        <span class="bulk-count"><b id="bulkCount">0</b> dòng đã chọn</span>
+        <input type="text" id="bulkProfile" placeholder="Profile" spellcheck="false">
+        <input type="text" id="bulkCountry" maxlength="2" placeholder="US" spellcheck="false">
+        <input type="text" id="bulkCategory" placeholder="Category ID" spellcheck="false">
+        <button id="bulkApply" class="primary">Áp dụng</button>
+        <span class="sep"></span>
+        <button id="aiBtn" title="Sửa tiêu đề các dòng đã chọn; không chọn thì chỉ sửa tiêu đề đang cảnh báo">✨ Sửa tiêu đề AI</button>
+        <button id="aiRestore" title="Bỏ tiêu đề AI đã viết, quay lại tiêu đề trước khi dùng AI — cho dòng đã tích (không tích = tất cả)">↺ Tiêu đề trước khi dùng AI</button>
+      </div>
+      <div class="table-wrap">
+        <table class="results">
+          <thead><tr><th class="sel"><input type="checkbox" id="selAll" title="Chọn tất cả"></th><th>#</th><th>Ảnh</th><th>SKU</th><th>Tiêu đề <span class="th-note">(tối đa 80)</span></th><th>Profile · Country</th><th>Category</th><th>Biến thể · Giá</th><th>Trạng thái</th><th></th></tr></thead>
+          <tbody id="results"><tr><td colspan="10" class="empty">Chưa có kết quả — dán link ở bước 1 rồi bấm Chạy</td></tr></tbody>
+        </table>
+      </div>
+      <div id="conflictBar" class="conflict" hidden></div>
+      <div id="catBar" class="conflict" hidden></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title"><span><span class="step">3</span> Xuất file CSV</span></div>
+      <div class="row" style="margin-top:0">
+        <button id="reexport" class="primary big" disabled title="Xuất CSV — hỏi chọn thư mục lưu, mỗi Profile 1 file">💾 Xuất CSV</button>
+        <button id="openDir" class="ghost">📂 Mở thư mục output</button>
+      </div>
+      <div id="outInfo" class="out-info"></div>
+    </section>
+
+    <details class="card" id="logCard">
+      <summary>Log</summary>
+      <pre id="log"></pre>
+    </details>
+   </div>
+
+   <!-- Theo dõi sản phẩm: danh sách đã list, kiểm tra giá / tồn kho trên site -->
+   <div id="trackView" hidden>
+    <header class="top">
+      <div>
+        <h1>Theo dõi sản phẩm</h1>
+        <div class="page-sub">Kiểm tra giá và tồn kho trên site của các sản phẩm đã list · chạy song song được với việc chạy link</div>
+      </div>
+    </header>
+    <div class="kpis" id="tkKpis"></div>
+
+    <section class="card">
+      <div class="card-title">
+        <span><span class="step">1</span> Danh sách đang theo dõi <span class="muted" id="tkCount"></span></span>
+        <span class="row" style="margin:0">
+          <label class="btn ghost" title="File list cũ: Excel / CSV (cột Profile + link) hoặc .txt (tên file = Profile, mỗi dòng 1 link). Chọn được nhiều file">📥 Nạp file list cũ<input type="file" id="tkListFile" accept=".xlsx,.xlsm,.csv,.txt" multiple hidden></label>
+          <label class="btn ghost" title="File kết quả upload của eBay (hoặc báo cáo Active listings): Success → đã lên eBay + Item ID, Failure → gỡ khỏi danh sách">📄 Nạp kết quả upload eBay<input type="file" id="tkResultFile" accept=".csv,.xlsx" multiple hidden></label>
+          <button id="tkResume" class="primary" hidden>▶ Chạy tiếp</button>
+          <button id="tkCheck" class="primary">🔍 Kiểm tra giá &amp; tồn kho</button>
+          <button id="tkStop" hidden>■ Dừng kiểm tra</button>
+        </span>
+      </div>
+      <div class="tk-note">Sản phẩm mới tự vào danh sách khi tool ghi file CSV (chạy xong hoặc bấm <b>Xuất CSV</b>). Nạp file kết quả upload của eBay: listing báo <b>Failure</b> tự gỡ khỏi danh sách.</div>
+      <div class="tk-alias" id="tkAlias"></div>
+      <div class="progress"><div id="tkBar"></div></div>
+      <div class="muted" id="tkProg" style="margin:-6px 0 10px"></div>
+      <div class="tk-tools">
+        <select id="tkProfile" data-all="Tất cả Profile"></select>
+        <select id="tkSite" data-all="Tất cả site"></select>
+        <input type="text" id="tkSearch" placeholder="Tìm SKU / tên / link" spellcheck="false">
+        <span class="tk-sel" id="tkSelBox" hidden><b id="tkSelN">0</b> đã chọn
+          <button id="tkCheckSel" class="mini">🔍 Kiểm tra dòng đã chọn</button>
+          <input type="text" id="tkProfNew" placeholder="Profile mới" spellcheck="false" style="width:110px;min-width:0">
+          <button id="tkSetProf" class="mini" title="Đổi Profile các dòng đã chọn (SKU trên eBay giữ nguyên)">Đổi Profile</button>
+          <button id="tkRemove" class="mini">✕ Bỏ theo dõi</button></span>
+        <span class="tk-flt" id="tkFlt"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="trk">
+          <thead><tr><th style="width:24px"></th><th style="width:18px"></th><th>SKU / sản phẩm</th><th>Profile</th><th>Ngày list</th><th>Giá site lúc list</th><th>Giá eBay</th><th>Thay đổi trên site</th><th>Kiểm tra</th></tr></thead>
+          <tbody id="tkRows"></tbody>
+        </table>
+      </div>
+      <details class="tk-logbox" id="tkLogBox"><summary>Log kiểm tra</summary><pre id="tkLog"></pre></details>
+    </section>
+
+    <section class="card">
+      <div class="card-title"><span><span class="step">2</span> Cập nhật lên eBay</span></div>
+      <div class="row" style="margin-top:0">
+        <button id="tkRevise" class="primary big">💾 Xuất file Revise</button>
+        <span class="muted" id="tkReviseInfo"></span>
+      </div>
+      <div class="tk-note" style="margin-top:10px">File Revise (mỗi Profile 1 file) chỉ đưa <b>số lượng 0</b> cho size hết hàng, cần Item ID (nạp file kết quả upload eBay). Giá thay đổi chỉ báo, không sửa — tăng giá trên $2 tô đỏ.</div>
+    </section>
+   </div>
+  </main>
+</div>
+
+<div class="modal" id="settingsModal" hidden>
+  <div class="sheet settings-sheet" role="dialog" aria-modal="true" aria-label="Cài đặt">
+    <div class="set-head">
+      <h2>Cài đặt</h2>
+      <button class="close" id="settingsClose" title="Đóng (Esc)">✕</button>
+    </div>
+    <div class="set-body">
+      <nav class="set-nav" id="setNav">
+        <a href="#s-listing" class="on">Giá &amp; listing</a>
+        <a href="#s-sites">Từng site</a>
+        <a href="#s-category">Category · eBay API</a>
+        <a href="#s-ai">AI viết tiêu đề</a>
+        <a href="#s-desc">Mô tả</a>
+        <a href="#s-proxy">Proxy</a>
+        <a href="#s-images">Nơi up ảnh</a>
+      </nav>
+      <div class="set-content" id="setContent">
+        <section class="set-sec" id="s-listing">
+          <h3>Giá &amp; listing</h3>
+          <div class="grid" id="fields"></div>
+          <div class="row" style="gap:20px">
+            <label class="check"><input type="checkbox" id="round_99"> Làm tròn giá lên x.99</label>
+            <label class="check"><input type="checkbox" id="skip_out_of_stock"> Chỉ tích sẵn size/màu còn hàng <span class="muted small">(chọn lại từng sản phẩm ở nút Xem)</span></label>
+            <label class="check"><input type="checkbox" id="show_details"> Đưa thông số (chất liệu, giặt…) vào mô tả</label>
+          </div>
+        </section>
+
+        <section class="set-sec" id="s-sites">
+          <h3>Từng site</h3>
+          <p class="hint">% giá chỉnh ở đầu trang của từng tab site · Proxy: tool chạy IP gốc, bị chặn thì tự chuyển sang proxy
+            (muốn ép 1 site luôn đi proxy thì bật nút "Luôn đi qua proxy" ở đầu tab site đó)</p>
+          <div style="overflow:auto">
+            <table class="set-table" id="siteTable">
+              <thead><tr><th>Site</th><th title="SKU của các dòng đã chạy giữ nguyên; tiền tố mới dùng cho lần chạy sau">Tiền tố SKU <span class="muted small">(lần chạy sau)</span></th><th>Nghỉ giữa link (giây)</th><th>Shipping profile riêng</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="set-sec" id="s-category">
+          <h3>Category · eBay API</h3>
+          <p class="hint">Key app Production ở developer.ebay.com — chỉ đọc danh mục, không đụng acc bán hàng.
+            Thứ tự chọn Category: gõ tay ở bảng → quy tắc ép bên dưới → eBay gợi ý.</p>
+          <p id="ebayMissing" class="st-err small" hidden>Chưa có eBay API — tool sẽ không tự chọn Category và không tự điền item specifics (phải gõ Category ID từng dòng).</p>
+          <div class="grid">
+            <label class="f" style="grid-column: span 2">Client ID (App ID)<input type="text" id="ebay_client_id" autocomplete="off" spellcheck="false"></label>
+            <label class="f" style="grid-column: span 2">Client secret (Cert ID)<input type="password" id="ebay_client_secret" autocomplete="new-password"></label>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="auto_category"> Tự chọn Category + tự điền item specifics</label>
+            <button id="testEbay">Kiểm tra key</button><span id="ebayStatus" class="muted small"></span>
+          </div>
+          <h4>Quy tắc ép Category <span class="muted">(tuỳ chọn)</span></h4>
+          <p class="hint">Khi muốn 1 nhóm hàng luôn vào Category cố định. Tìm từ khoá trong tên + danh mục sản phẩm; quy tắc của đúng site được xét trước, rồi tới quy tắc "(mọi site)", trên cùng khớp trước. Item specifics dạng <code>Type=Dress|Style=A-Line</code>.</p>
+          <div style="overflow:auto">
+            <table class="set-table rules" id="ruleTable">
+              <thead><tr><th>Site</th><th>Từ khoá (cách nhau dấu phẩy)</th><th>Department</th><th>Category ID</th><th>Item specifics thêm</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="row" style="margin-top:8px"><button id="addRule" class="mini">+ Thêm quy tắc</button></div>
+        </section>
+
+        <section class="set-sec" id="s-ai">
+          <h3>AI viết tiêu đề (Google Gemini)</h3>
+          <p class="hint">API key miễn phí ở <code>aistudio.google.com/apikey</code></p>
+          <div class="grid">
+            <label class="f" style="grid-column: span 2">Gemini API key<input type="password" id="gemini_api_key" autocomplete="new-password"></label>
+            <label class="f">Model<input type="text" id="gemini_model" spellcheck="false" placeholder="gemini-flash-lite-latest"></label>
+          </div>
+          <label class="f" style="margin-top:12px">Yêu cầu thêm cho AI (tuỳ chọn — 1 câu ngắn, tiếng Anh hoặc Việt)
+            <input type="text" id="ai_title_notes" placeholder="vd: luôn ghi size range ở cuối, ưu tiên từ Vintage nếu có"></label>
+          <h4>Prompt — quy tắc AI dùng để viết tiêu đề</h4>
+          <p class="hint">Sửa trực tiếp được (nên viết tiếng Anh). Tool luôn tự thêm phía sau: danh sách tên hãng + từ cấm, yêu cầu trả về JSON và dữ liệu sản phẩm —
+            nên không cần ghi những phần đó. Sau khi AI trả về, tool vẫn tự lọc tên hãng / ký tự lạ và cắt về 80 ký tự.</p>
+          <textarea id="ai_prompt" rows="14" spellcheck="false" style="font: 12px/1.5 Consolas, monospace"></textarea>
+          <div class="row" style="margin-top:8px">
+            <button id="aiPromptReset" class="mini">↺ Về prompt mặc định</button>
+            <span class="muted small" id="aiPromptState"></span>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="brand_in_title"> Tên hãng ở đầu tiêu đề <span class="muted small">(ô Brand vẫn Unbranded, mô tả vẫn bỏ tên hãng — áp dụng cho lần chạy sau)</span></label>
+            <label class="check"><input type="checkbox" id="ai_titles"> Tự viết tiêu đề bằng AI khi chạy xong</label>
+            <button id="testAi">Kiểm tra key</button><span id="aiStatus" class="muted small"></span>
+          </div>
+        </section>
+
+        <section class="set-sec" id="s-desc">
+          <h3>Mô tả</h3>
+          <p class="hint">Gạch đầu dòng cố định thêm vào cuối mô tả mọi listing (mỗi dòng 1 ý)</p>
+          <textarea id="footer" rows="3"></textarea>
+        </section>
+
+        <section class="set-sec" id="s-proxy">
+          <h3>Proxy</h3>
+          <p class="hint">Dán proxy vào ô dưới (mỗi dòng <code>ip:port:user:pass</code> hoặc <code>ip:port</code>). Sau khi lưu, tool chỉ hiện
+            <b>IP:port</b> — user/pass được cất kín, không hiện lại trên giao diện. Tool tự đổi proxy khi bị chặn / rớt mạng.</p>
+          <div class="px-head"><b id="pxCount">0 proxy</b> <span class="muted small" id="pxSource"></span></div>
+          <div class="px-list" id="pxList"></div>
+          <textarea id="pxPaste" rows="4" spellcheck="false" autocomplete="off" placeholder="Dán proxy vào đây, mỗi dòng 1 proxy&#10;161.77.1.2:50100:user:pass"></textarea>
+          <div class="row" style="margin-top:8px">
+            <button id="pxAdd" class="primary">+ Thêm vào danh sách</button>
+            <button id="pxReplace">Thay toàn bộ bằng các dòng vừa dán</button>
+            <button id="pxClear" class="danger-text">Xoá hết proxy</button>
+            <span class="sep"></span>
+            <button id="testProxy">Kiểm tra 3 proxy đầu</button>
+          </div>
+          <div id="proxyStatus" class="muted small" style="margin-top:8px"></div>
+        </section>
+
+        <section class="set-sec" id="s-site-proxy">
+          <h3>Proxy riêng theo site</h3>
+          <p class="hint">Site có proxy riêng chạy theo thứ tự: <b>IP gốc → proxy riêng → proxy chung</b>. Site không có ở đây chỉ dùng proxy chung.
+            Ví dụ Best Buy: IP Việt Nam dân cư + vài proxy Mỹ ở dải mạng khác nhau.</p>
+          <div id="spxRows"></div>
+          <div class="spx-add">
+            <div class="row" style="margin-bottom:8px">
+              <b class="small">Thêm proxy riêng cho</b>
+              <select id="spxSite"></select>
+              <span class="muted small">(site đã có ở trên thì bấm "+ Thêm" ở dòng đó)</span>
+            </div>
+            <textarea id="spxPaste" rows="3" spellcheck="false" autocomplete="off" placeholder="Mỗi dòng 1 proxy: ip:port:user:pass hoặc ip:port"></textarea>
+            <div class="row" style="margin-top:8px">
+              <button id="spxAdd" class="primary">+ Thêm vào site đã chọn</button>
+              <span class="muted small">Sau khi lưu chỉ hiện ip:port, user/pass được cất kín</span>
+            </div>
+            <div id="spxStatus" class="muted small" style="margin-top:6px"></div>
+          </div>
+        </section>
+
+        <section class="set-sec" id="s-images">
+          <h3>Nơi up ảnh</h3>
+          <div class="host-opts">
+            <label class="host-opt"><input type="radio" name="host" value="auto"><span><b>Tự động (khuyên dùng)</b><small>freeimage.host → ImgBB → Cloudflare R2: nơi nào hỏng tự chuyển sang nơi sau</small></span></label>
+            <label class="host-opt"><input type="radio" name="host" value="free"><span><b>Chỉ 2 trang free</b><small>freeimage.host → ImgBB, không dùng Cloudflare R2</small></span></label>
+            <label class="host-opt"><input type="radio" name="host" value="r2"><span><b>Chỉ Cloudflare R2</b><small>Ảnh nằm trong tài khoản Cloudflare của bạn</small></span></label>
+          </div>
+          <div id="imgbbFields" hidden>
+            <div class="grid" style="margin-top:14px">
+              <label class="f" style="grid-column: span 2">Key ImgBB (nơi miễn phí thứ 2, tuỳ chọn)<input type="password" id="imgbb_api_key" autocomplete="new-password" spellcheck="false"></label>
+            </div>
+            <p class="hint">Lấy key miễn phí ở <a href="https://api.imgbb.com/" target="_blank" rel="noopener">api.imgbb.com</a> (đăng ký → bấm "Get API key"). Để trống thì bỏ qua ImgBB. freeimage.host không cần key.</p>
+          </div>
+          <div id="r2Fields">
+            <div class="hint" id="r2Title" style="margin-top:14px"><b>Cloudflare R2</b> — chỗ cuối, chỉ dùng khi các nơi miễn phí đều hỏng (để trống thì bỏ qua)</div>
+            <div class="grid" style="margin-top:10px">
+              <label class="f">Account ID<input type="text" id="r2_account_id" autocomplete="off" spellcheck="false"></label>
+              <label class="f">Access Key ID<input type="text" id="r2_access_key_id" autocomplete="off" spellcheck="false"></label>
+              <label class="f">Secret Access Key<input type="password" id="r2_secret_access_key" autocomplete="new-password"></label>
+              <label class="f">Tên bucket<input type="text" id="r2_bucket" autocomplete="off" spellcheck="false"></label>
+              <label class="f" style="grid-column: span 2">Link công khai của bucket<input type="text" id="r2_public_url" autocomplete="off" spellcheck="false" placeholder="https://pub-xxxx.r2.dev"></label>
+              <label class="f">Thư mục trong bucket (tuỳ chọn)<input type="text" id="r2_folder" autocomplete="off" spellcheck="false"></label>
+            </div>
+            <p class="hint">Secret Access Key chỉ lưu trong file config.json trên máy này và không hiện lại trên giao diện.</p>
+          </div>
+          <div class="row"><button id="testHost">Kiểm tra kết nối</button><span id="hostStatus" class="muted small"></span></div>
+        </section>
+      </div>
+    </div>
+    <div class="set-foot">
+      <span id="saved" class="saved"></span>
+      <button id="settingsCancel">Đóng</button>
+      <button id="save" class="primary">Lưu cài đặt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Xem trước listing">
+    <button class="close" id="pvClose" title="Đóng (Esc)">✕</button>
+    <div class="nav">
+      <button id="pvPrev">← Trước</button>
+      <button id="pvNext">Sau →</button>
+      <span class="muted" id="pvPos"></span>
+    </div>
+    <div class="flt-box" id="fltBox">
+      <div class="flt-head"><b>Chọn giống trang gốc</b> <span class="muted small">— mặc định theo link gốc; bấm 1 nút = chuyển sang lựa chọn đó, giữ <b>Ctrl</b> + bấm = chọn thêm / bỏ bớt; chọn đúng 1 màu / 1 nhóm size thì tên đó được thêm vào tiêu đề · xong bấm <b>Lưu biến thể</b></span></div>
+      <div class="flt" id="fltGroupsBox"><span class="flt-lbl">Nhóm size</span><div class="chips" id="fltGroups"></div></div>
+      <div class="flt" id="fltColorsBox"><span class="flt-lbl">Màu</span><div class="chips" id="fltColors"></div></div>
+      <div class="flt"><span class="flt-lbl">Size / kích thước</span><div class="small" id="fltSizes"></div></div>
+      <div class="flt"><span class="flt-lbl">Tiêu đề</span><div id="fltTitle"></div></div>
+      <div class="row" style="margin-top:6px"><button class="primary" id="vsSave2">Lưu biến thể</button><span class="small muted" id="vsStatus2"></span></div>
+    </div>
+    <div class="photo-box" id="photoBox" hidden>
+      <div class="photo-head"><b id="photoTitle"></b><span class="grow"></span>
+        <button class="mini" id="photoRetry" hidden></button><button class="mini" id="photoCancel" hidden>Hủy</button></div>
+      <div class="progress"><div id="photoBar"></div></div>
+      <div class="photo-thumbs" id="photoThumbs"></div>
+    </div>
+    <div class="pv">
+      <div class="pv-img">
+        <img class="main" id="pvImg" alt="">
+        <div class="pv-thumbs" id="pvThumbs"></div>
+      </div>
+      <div class="pv-info">
+        <h2 id="pvTitle"></h2>
+        <div class="cond">Condition: <b id="pvCond">New</b> · Brand: <b id="pvBrand"></b></div>
+        <div class="small" id="pvCondNote" hidden style="color:#b45309"></div>
+        <div class="price" id="pvPrice"></div>
+        <div class="srcprice" id="pvSrcPrice"></div>
+        <div class="small" id="pvLive" hidden style="color:#b45309">Đang xem theo lựa chọn mới — bấm <b>Lưu biến thể</b> để giữ</div>
+        <div id="pvColorBox"><div class="lbl">Color: <b id="pvColor" style="color:var(--text)"></b></div><div class="chips" id="pvColors"></div></div>
+        <div id="pvSizeBox"><div class="lbl">Size</div><div class="chips" id="pvSizes"></div></div>
+        <div id="pvPers" hidden><div class="lbl">Personalization:</div><div class="small" id="pvPersText"></div></div>
+        <div class="meta" id="pvMeta"></div>
+        <div id="pvErr" class="pv-err" hidden></div>
+      </div>
+    </div>
+    <div class="pi-box" id="piBox" hidden>
+      <div class="flt-head"><b>Cùng trang trên site còn <span id="piCount"></span> món khác</b>
+        <span class="muted small">— mỗi món là 1 listing riêng (eBay không cho gộp món khác loại làm biến thể). Bấm = chọn 1 món, giữ <b>Ctrl</b> + bấm = chọn nhiều, rồi bấm Thêm vào bảng (cùng Profile · Country với dòng này)</span></div>
+      <div class="pi-grid" id="piGrid"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="mini" id="piAll">Chọn tất cả</button>
+        <button class="primary" id="piAdd">＋ Thêm vào bảng</button>
+        <span class="small muted" id="piStatus"></span>
+      </div>
+    </div>
+    <details class="vs-adv" id="vsDetails">
+    <summary><b>Chỉnh từng size (nâng cao)</b> <span class="muted" id="pvSelCount"></span></summary>
+    <div class="row" style="margin:8px 0">
+      <button class="mini" id="vsAll">Chọn tất cả</button>
+      <button class="mini" id="vsAvail">Chỉ chọn còn hàng</button>
+      <button class="mini" id="vsNone">Bỏ chọn hết</button>
+      <span class="small muted">Bấm 1 dòng = chỉ chọn dòng đó · giữ <b>Ctrl</b> + bấm = chọn thêm / bỏ bớt</span>
+      <span class="sep"></span>
+      <button class="primary" id="vsSave">Lưu biến thể</button>
+      <span class="small muted" id="vsStatus"></span>
+    </div>
+    <div class="vtable"><table><thead><tr><th class="sel"></th><th>Color</th><th>Size</th><th>Trên site</th><th>Giá site</th><th>Giá eBay</th><th>Số lượng</th></tr></thead><tbody id="pvVariants"></tbody></table></div>
+    </details>
+    <h3>Item specifics <span class="muted" id="pvSpecHint" style="font-weight:400"></span></h3>
+    <div class="specs edit" id="pvSpecs"></div>
+    <div class="row"><button id="pvSpecSave" class="primary">Lưu item specifics</button><span id="pvSpecStatus" class="small muted"></span></div>
+    <h3>Item description</h3>
+    <div class="desc" id="pvDesc"></div>
+  </div>
+</div>
+
+<script>
+const GENERAL = [
+  ["quantity", "Số lượng mỗi biến thể", "number"],
+  ["max_images", "Số ảnh tối đa listing (≤ 24)", "number"],
+  ["max_images_per_color", "Số ảnh tối đa mỗi màu", "number"],
+  ["brand", "Brand (để Unbranded)"],
+  ["condition_id", "Condition ID (1000 = New with tags)"],
+  ["location", "Location"],
+  ["shipping_profile", "Shipping profile"],
+  ["return_profile", "Return profile"],
+  ["payment_profile", "Payment profile"],
+  ["delay_seconds", "Nghỉ giữa các link (giây, site không đặt riêng)", "number"],
+  ["max_parallel_sites", "Số site chạy cùng lúc (1–6, mỗi site 1 luồng riêng)", "number"],
+];
+const DEPTS = ["", "Women", "Men", "Girls", "Boys", "Baby Girls", "Baby Boys", "Unisex Adults", "Unisex Kids"];
+// màu biểu tượng site (sáng, nhìn rõ trên cột trái nền tối)
+const ICON_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#8b5cf6", "#14b8a6", "#ef4444", "#f97316",
+  "#0ea5e9", "#84cc16", "#a855f7"];
+const TITLE_MAX = 80;
+const $ = (s) => document.querySelector(s);
+const el = (tag, props = {}, ...kids) => {
+  const n = Object.assign(document.createElement(tag), props);
+  kids.forEach((k) => n.append(k));
+  return n;
+};
+
+let cfg = null;
+let SITES = [];
+let tab = "";
+let logSince = 0;
+let edits = {};
+let selected = new Set();
+let imported = null;
+let lastSig = "";
+let lastResults = [];
+let lastStatus = null;
+let exporting = false;
+const tabState = {};
+
+let retryMenu = null;
+function closeRetryMenu() {
+  retryMenu?.remove();
+  retryMenu = null;
+}
+document.addEventListener("pointerdown", (e) => {
+  if (retryMenu && !retryMenu.contains(e.target)) closeRetryMenu();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRetryMenu(); });
+document.addEventListener("scroll", closeRetryMenu, true);
+window.addEventListener("blur", closeRetryMenu);
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {   // WebView cũ / không cho dùng clipboard API -> cách cũ
+    const ta = el("textarea", { value: text, style: "position:fixed;left:-9999px;top:0" });
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) {}
+    ta.remove();
+    return ok;
+  }
+}
+// Chuột phải vào 1 dòng bảng Kết quả: Copy link (mọi dòng) + Thử lại link này (dòng lỗi)
+function showRetryMenu(e, r) {
+  e.preventDefault();
+  closeRetryMenu();
+  const sourceTab = tab, rid = r.id;
+  const items = [];
+  const copyBtn = el("button", { textContent: "📋 Copy link", title: r.url });
+  copyBtn.onclick = async () => {
+    const ok = await copyText(r.url);
+    copyBtn.textContent = ok ? "✓ Đã chép link" : "✗ Không chép được";
+    setTimeout(closeRetryMenu, 700);
+  };
+  items.push(copyBtn);
+  let button = null;
+  if (r.status === "error") {
+    const busy = lastStatus?.running || lastStatus?.busy_other || lastStatus?.ai_running;
+    button = el("button", { textContent: "↻ Thử lại link này", disabled: !!busy,
+      title: busy ? "Chờ tác vụ đang chạy hoàn tất" : "Chỉ chạy lại dòng lỗi này" });
+    items.push(button);
+  }
+  retryMenu = el("div", { role: "menu" }, ...items);
+  Object.assign(retryMenu.style, { position: "fixed", zIndex: "10000", padding: "6px", display: "flex", flexDirection: "column", gap: "4px",
+    background: "white", border: "1px solid #ddd", borderRadius: "8px", boxShadow: "0 4px 16px #0002" });
+  document.body.append(retryMenu);
+  const box = retryMenu.getBoundingClientRect();
+  retryMenu.style.left = Math.max(0, Math.min(e.clientX, innerWidth - box.width)) + "px";
+  retryMenu.style.top = Math.max(0, Math.min(e.clientY, innerHeight - box.height)) + "px";
+  if (button) button.onclick = async () => {
+    closeRetryMenu();
+    try {
+      if (tab !== sourceTab) return;
+      await saveSettings(true);
+      if (tab !== sourceTab) return;
+      await api("/api/retry", { tab: sourceTab, id: rid, upload: $("#upload").checked });
+      $("#logCard").open = true;
+      lastSig = "";
+      poll();
+    } catch (err) { alert(err.message); }
+  };
+  (button || copyBtn).focus();
+}
+
+async function api(path, body) {
+  const opt = body === undefined ? {} :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tab, ...body }) };
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const siteInfo = (k) => SITES.find((s) => s.key === k) || {};
+// Ảnh thu nhỏ do tool làm sẵn (ảnh eBay 1600px rất nặng, bảng chỉ cần ô nhỏ)
+const thumb = (u) => (u && u.startsWith("https://") ? "/api/thumb?u=" + encodeURIComponent(u) : u);
+
+// ---------- tab
+function renderTabs() {
+  $("#tabs").replaceChildren(...SITES.map((s, i) => {
+    const b = el("button", {}, el("span", { className: "ico", textContent: s.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase(), style: `background:${ICON_COLORS[i % ICON_COLORS.length]}` }), s.name);
+    b.dataset.tab = s.key;
+    if (cfg.sites[s.key]?.use_proxy) b.append(el("span", { className: "px", textContent: "proxy" }));
+    // link chờ chạy (file tổng / Import ở tab đó): số link + chấm xanh nhấp nháy
+    const pend = (s.key === tab ? imported : tabState[s.key]?.imported)?.items?.length;
+    if (pend) b.append(el("span", { className: "cnt", textContent: pend, title: `${pend} link chờ chạy` }), el("span", { className: "pdot" }));
+    b.onclick = () => { tipHide(); showTrack(false); switchTab(s.key); };
+    b.onmouseenter = () => tipShow(b, s);
+    b.onmouseleave = tipHide;
+    b.classList.toggle("on", s.key === tab && $("#trackView").hidden);
+    return b;
+  }));
+}
+
+function applyTabUI() {
+  const s = siteInfo(tab);
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  $("#linkTitle").textContent = `Dán link sản phẩm ${s.name}`;
+  renderPageSub();
+  $("#links").placeholder = (s.examples || []).join("\n") + "\nMỗi dòng 1 link — Profile và Action Country điền trong bảng Kết quả sau khi chạy, hoặc Import file có sẵn cột Profile";
+  $("#makeTemplate").title = "Tạo file Excel mẫu (cột Profile, Action Country, Link sản phẩm, Site — Site chọn trong danh sách xổ xuống, luôn cập nhật đủ site mới) và mở bằng Excel";
+  $("#useProxy").checked = !!cfg.sites[tab]?.use_proxy;
+  syncProxyInfo();
+}
+
+// Dòng tóm tắt dưới tên site: % giá, proxy, Category tự động, AI tiêu đề
+function renderPageSub() {
+  const s = siteInfo(tab);
+  const sc = cfg.sites[tab] || {};
+  const pct = String(sc.price_percent || "").trim() || cfg.price_percent;
+  if (document.activeElement !== $("#sitePct")) $("#sitePct").value = pct;
+  $("#pageTitle").textContent = s.name || "Retail → eBay CSV";
+  const bits = [["SKU", `${sc.prefix || ""}…`],
+    ["Category", !(cfg.ebay_client_id && cfg.ebay_client_secret_set) ? "chưa có eBay API — gõ tay"
+      : cfg.auto_category ? "eBay tự gợi ý" : "gõ tay"],
+    ["Tiêu đề", cfg.ai_titles && cfg.gemini_api_key_set ? "AI tự viết" : "theo site"]];
+  $("#pageSub").replaceChildren(...bits.flatMap(([k, v], i) => [i ? " · " : "", `${k}: `, el("b", { textContent: v })]),
+    " · ", Object.assign(el("a", { href: "#", textContent: "đổi" }), { onclick: (e) => { e.preventDefault(); openSettings(); } }));
+}
+
+// ---------- cửa sổ cài đặt
+function openSettings(section) {
+  renderSettings();
+  $("#settingsModal").hidden = false;
+  document.body.style.overflow = "hidden";
+  if (section) scrollToSection(section);
+}
+// Vị trí 1 mục so với khung cuộn của cửa sổ cài đặt
+const secTop = (sec) => sec.getBoundingClientRect().top - $("#setContent").getBoundingClientRect().top + $("#setContent").scrollTop;
+function scrollToSection(id) {
+  const sec = document.getElementById(id);
+  if (sec) $("#setContent").scrollTop = secTop(sec) - 4;
+}
+function closeSettings() {
+  $("#settingsModal").hidden = true;
+  document.body.style.overflow = "";
+  renderSettings();   // bấm Đóng / Huỷ: bỏ các thay đổi chưa lưu (không để lần lưu ngầm sau ghi nhầm)
+}
+function syncSetNav() {
+  const box = $("#setContent");
+  let cur = null;
+  box.querySelectorAll(".set-sec").forEach((sec) => { if (secTop(sec) <= box.scrollTop + 40) cur = sec.id; });
+  if (box.scrollTop + box.clientHeight >= box.scrollHeight - 4) cur = box.querySelector(".set-sec:last-child").id;
+  document.querySelectorAll("#setNav a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + cur));
+}
+
+function syncProxyInfo() {
+  const on = $("#useProxy").checked;
+  const need = siteInfo(tab).needs_proxy;
+  $("#pxInfo").replaceChildren();
+  const own = (cfg.site_proxy_lists || {})[tab]?.length || 0;
+  if (on) $("#pxInfo").append(el("b", { textContent: `${cfg.proxy_count + own} proxy` }), " — tự đổi khi bị chặn");
+  else if (cfg.proxy_count || own) $("#pxInfo").append("IP gốc · bị chặn tự chuyển proxy");
+  else if (need) $("#pxInfo").append(el("span", { className: "st-err", textContent: "Site này chặn IP Việt Nam — dán proxy trong Cài đặt" }));
+  if (own) $("#pxInfo").append(" · ", el("b", { textContent: `${own} proxy riêng`, title: "Cài đặt → Proxy riêng theo site: IP gốc → proxy riêng → proxy chung" }));
+}
+
+// Lấy lại cài đặt mới nhất từ tool (đổi ở chỗ khác / máy khác thì giao diện vẫn đúng)
+async function refreshCfg() {
+  const editing = () => !$("#settingsModal").hidden || document.activeElement === $("#sitePct");
+  if (editing()) return;   // đang sửa thì không đè
+  try {
+    const fresh = await api("/api/config");
+    if (editing()) return;   // vừa mở Cài đặt / bấm vào ô % trong lúc chờ -> không đè
+    cfg = fresh;
+    $("#useProxy").checked = !!cfg.sites?.[tab]?.use_proxy;
+    renderPageSub();
+    syncProxyInfo();
+    renderSettings();   // form Cài đặt (đang đóng) cũng theo bản mới, lần lưu ngầm sau không ghi đè bằng số cũ
+  } catch {}
+}
+
+function switchTab(t) {
+  if (t === tab) return;
+  refreshCfg();
+  if (tab) tabState[tab] = { links: $("#links").value, edits, selected, imported };
+  tab = t;
+  const st = tabState[t] || { links: "", edits: {}, selected: new Set(), imported: null };
+  ({ edits, selected, imported } = st);
+  $("#links").value = st.links;
+  closePreview();
+  applyTabUI();
+  renderImport();
+  logSince = 0;
+  $("#log").replaceChildren();
+  lastSig = "";
+  lastStatus = null;
+  rowFilter = null;
+  renderResults([]);
+  $("#outInfo").replaceChildren();
+  try { localStorage.setItem("retail_tab", t); } catch {}
+  poll();
+}
+
+// ---------- cài đặt
+function renderSettings() {
+  $("#fields").replaceChildren(...GENERAL.map(([key, label, type]) => {
+    const input = el("input", { type: type || "text", id: "f_" + key, value: cfg[key] ?? "" });
+    if (type === "number") input.step = "any";
+    return el("label", { className: "f" }, label, input);
+  }));
+  ["round_99", "skip_out_of_stock", "show_details", "auto_category", "ai_titles", "brand_in_title"].forEach((k) => ($("#" + k).checked = !!cfg[k]));
+  $("#gemini_model").value = cfg.gemini_model || "";
+  $("#ai_title_notes").value = cfg.ai_title_notes || "";
+  $("#ai_prompt").value = cfg.ai_prompt || cfg.ai_prompt_default || "";
+  syncPromptState();
+  $("#gemini_api_key").value = "";
+  $("#gemini_api_key").placeholder = cfg.gemini_api_key_set ? "Đã lưu — để trống nếu không đổi" : "Dán API key";
+  $("#ebay_client_id").value = cfg.ebay_client_id || "";
+  $("#ebay_client_secret").value = "";
+  $("#ebay_client_secret").placeholder = cfg.ebay_client_secret_set ? "Đã lưu — để trống nếu không đổi" : "Dán Client secret";
+  $("#siteTable tbody").replaceChildren(...SITES.map((s) => {
+    const sc = cfg.sites[s.key] || {};
+    const mk = (k, cls, ph = "") => {
+      const i = el("input", { type: "text", value: sc[k] ?? "", placeholder: ph, spellcheck: false });
+      i.dataset.site = s.key; i.dataset.k = k;
+      return el("td", { className: cls }, i);
+    };
+    return el("tr", {}, el("td", { className: "site", textContent: s.name }), mk("prefix", "w-prefix"),
+      mk("delay", "w-pct", String(cfg.delay_seconds ?? 2)), mk("shipping_profile", "", cfg.shipping_profile || ""));
+  }));
+  $("#ebayMissing").hidden = !!(cfg.ebay_client_id && cfg.ebay_client_secret_set);
+  renderRules(cfg.category_rules || []);
+  $("#footer").value = (cfg.footer_bullets || []).join("\n");
+  $("#upload").checked = cfg.upload_images !== false;
+  renderProxies();
+  renderSiteProxies();
+  renderHost();
+}
+
+function ruleRow(r) {
+  const inp = (k, ph) => el("input", { type: "text", value: r[k] || "", placeholder: ph, spellcheck: false, className: "r-" + k });
+  const dept = el("select", { className: "r-dept" }, ...DEPTS.map((d) => el("option", { value: d, textContent: d || "(mọi)", selected: d === (r.dept || "") })));
+  // Site: chỉ áp dụng cho sản phẩm của site đó; trống = mọi site
+  const site = el("select", { className: "r-site" }, el("option", { value: "", textContent: "(mọi site)" }),
+    ...SITES.map((s) => el("option", { value: s.key, textContent: s.name, selected: s.key === (r.site || "") })));
+  const rm = el("button", { className: "mini", textContent: "✕", title: "Xoá quy tắc" });
+  const tr = el("tr", {}, el("td", { className: "site" }, site), el("td", { className: "kw" }, inp("keywords", "dress, gown")), el("td", { className: "dept" }, dept),
+    el("td", { className: "cat" }, inp("category", "63861")), el("td", {}, inp("specifics", "Type=Dress")), el("td", { className: "rm" }, rm));
+  rm.onclick = () => tr.remove();
+  return tr;
+}
+function renderRules(rules) { $("#ruleTable tbody").replaceChildren(...rules.map(ruleRow)); }
+
+function collectSettings() {
+  const out = {};
+  for (const [key, , type] of GENERAL) {
+    const v = $("#f_" + key).value;
+    if (type === "number" && String(v).trim() === "") continue;   // ô số để trống: giữ giá trị cũ (không thành 0)
+    out[key] = type === "number" ? Number(v) : v;
+  }
+  ["round_99", "skip_out_of_stock", "show_details", "auto_category", "ai_titles", "brand_in_title"].forEach((k) => (out[k] = $("#" + k).checked));
+  out.gemini_model = $("#gemini_model").value.trim();
+  out.ai_title_notes = $("#ai_title_notes").value.trim();
+  // Giống hệt mặc định -> lưu trống (sau này prompt mặc định được cập nhật thì tự dùng bản mới)
+  const pr = $("#ai_prompt").value.trim();
+  out.ai_prompt = pr === (cfg.ai_prompt_default || "").trim() ? "" : pr;
+  const gk = $("#gemini_api_key").value.trim();
+  if (gk) out.gemini_api_key = gk;
+  out.ebay_client_id = $("#ebay_client_id").value.trim();
+  const es = $("#ebay_client_secret").value.trim();
+  if (es) out.ebay_client_secret = es;   // để trống = giữ secret đã lưu
+  out.sites = {};
+  document.querySelectorAll("#siteTable [data-site]").forEach((i) => {
+    (out.sites[i.dataset.site] ??= {})[i.dataset.k] = i.type === "checkbox" ? i.checked : i.value;
+  });
+  out.category_rules = [...document.querySelectorAll("#ruleTable tbody tr")].map((tr) => ({
+    site: tr.querySelector(".r-site").value,
+    keywords: tr.querySelector(".r-keywords").value, dept: tr.querySelector(".r-dept").value,
+    category: tr.querySelector(".r-category").value, specifics: tr.querySelector(".r-specifics").value }));
+  out.footer_bullets = $("#footer").value.split("\n");
+  out.upload_images = $("#upload").checked;
+  out.image_host = currentHost();
+  R2_TEXT.forEach((k) => (out[k] = $("#" + k).value.trim()));
+  const secret = $("#r2_secret_access_key").value.trim();
+  if (secret) out.r2_secret_access_key = secret;   // để trống = giữ secret đã lưu
+  const ik = $("#imgbb_api_key").value.trim();
+  if (ik) out.imgbb_api_key = ik;
+  return out;
+}
+
+async function saveSettings(silent) {
+  cfg = await api("/api/config", collectSettings());
+  const secret = $("#r2_secret_access_key");
+  secret.value = "";
+  secret.placeholder = cfg.r2_secret_access_key_set ? "Đã lưu — để trống nếu không đổi" : "Dán Secret Access Key";
+  $("#imgbb_api_key").value = "";
+  $("#imgbb_api_key").placeholder = cfg.imgbb_api_key_set ? "Đã lưu — để trống nếu không đổi" : "Dán key ImgBB";
+  $("#ebay_client_secret").value = "";
+  $("#ebay_client_secret").placeholder = cfg.ebay_client_secret_set ? "Đã lưu — để trống nếu không đổi" : "Dán Client secret";
+  $("#gemini_api_key").value = "";
+  $("#gemini_api_key").placeholder = cfg.gemini_api_key_set ? "Đã lưu — để trống nếu không đổi" : "Dán API key";
+  renderTabs();
+  $("#ebayMissing").hidden = !!(cfg.ebay_client_id && cfg.ebay_client_secret_set);
+  syncProxyInfo();
+  renderPageSub();
+  lastSig = "";
+  if (!silent) {   // giữ dòng này tới khi sửa tiếp, để biết chắc đã lưu (bảng cài đặt không tự đóng)
+    const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
+    $("#saved").style.color = "";
+    $("#saved").textContent = `✓ Đã lưu lúc ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  }
+  poll();
+}
+
+// ---------- nơi up ảnh
+const R2_TEXT = ["r2_account_id", "r2_access_key_id", "r2_bucket", "r2_public_url", "r2_folder"];
+// Tự động: freeimage.host -> ImgBB (nếu có key) -> R2 (nếu đã điền đủ). "Chỉ 2 trang free": bỏ R2. "Chỉ R2" thì chỉ R2.
+const hostChain = () => {
+  if (currentHost() === "r2") return "Cloudflare R2";
+  const r2ok = ["r2_account_id", "r2_access_key_id", "r2_bucket", "r2_public_url"].every((k) => $("#" + k).value.trim())
+    && ($("#r2_secret_access_key").value.trim() || cfg.r2_secret_access_key_set);
+  return ["freeimage.host", ($("#imgbb_api_key").value.trim() || cfg.imgbb_api_key_set) && "ImgBB", currentHost() === "auto" && r2ok && "Cloudflare R2"]
+    .filter(Boolean).join(" → ");
+};
+const currentHost = () => document.querySelector("input[name=host]:checked")?.value || "auto";
+function renderHost() {
+  const host = ["r2", "free"].includes(cfg.image_host) ? cfg.image_host : "auto";
+  document.querySelectorAll("input[name=host]").forEach((r) => (r.checked = r.value === host));
+  R2_TEXT.forEach((k) => ($("#" + k).value = cfg[k] ?? ""));
+  const secret = $("#r2_secret_access_key");
+  secret.value = "";
+  secret.placeholder = cfg.r2_secret_access_key_set ? "Đã lưu — để trống nếu không đổi" : "Dán Secret Access Key";
+  $("#imgbb_api_key").value = "";
+  $("#imgbb_api_key").placeholder = cfg.imgbb_api_key_set ? "Đã lưu — để trống nếu không đổi" : "Dán key ImgBB";
+  syncHost();
+}
+function syncHost() {
+  const host = currentHost();
+  $("#imgbbFields").hidden = host === "r2";
+  $("#r2Title").hidden = host === "r2";
+  $("#r2Fields").hidden = host === "free";   // chỉ 2 trang free: không cần thông tin R2
+  $("#hostName").textContent = hostChain();
+  $("#hostStatus").textContent = "";
+}
+async function testHost() {
+  const st = $("#hostStatus");
+  $("#testHost").disabled = true;
+  st.className = "muted small";
+  st.textContent = `Đang up thử 1 ảnh lên từng nơi: ${hostChain()}…`;
+  try {
+    await saveSettings(true);
+    const r = await api("/api/test-host", {});
+    st.className = "small stat " + (r.ok ? (r.hosts.every((h) => h.ok) ? "ok" : "warn") : "err");
+    st.textContent = r.hosts.map((h) => (h.ok ? `✓ ${h.name} OK` : `✗ ${h.name}: ${h.error}`)).join("   ·   ")
+      + (r.ok ? "" : " — chưa nơi nào dùng được");
+  } catch (e) { st.className = "small stat err"; st.textContent = "✗ " + e.message; }
+  $("#testHost").disabled = false;
+}
+async function testEbay() {
+  const st = $("#ebayStatus");
+  $("#testEbay").disabled = true;
+  st.className = "muted small";
+  st.textContent = "Đang hỏi eBay…";
+  try {
+    await saveSettings(true);
+    const r = await api("/api/test-ebay", {});
+    st.className = "small stat ok";
+    st.textContent = "✓ Key OK — thử \"girls quilted western dress\" → " + r.sample;
+  } catch (e) { st.className = "small stat err"; st.textContent = "✗ " + e.message; }
+  $("#testEbay").disabled = false;
+}
+function syncPromptState() {
+  const custom = $("#ai_prompt").value.trim() !== (cfg.ai_prompt_default || "").trim();
+  $("#aiPromptState").textContent = custom ? "Đang dùng prompt bạn đã sửa" : "Đang dùng prompt mặc định";
+}
+
+async function testAi() {
+  const st = $("#aiStatus");
+  $("#testAi").disabled = true;
+  st.className = "muted small";
+  st.textContent = "Đang hỏi Gemini…";
+  try {
+    await saveSettings(true);
+    await api("/api/test-ai", {});
+    st.className = "small stat ok";
+    st.textContent = "✓ Key Gemini OK";
+  } catch (e) { st.className = "small stat err"; st.textContent = "✗ " + e.message; }
+  $("#testAi").disabled = false;
+}
+
+async function aiFixOne(id, btn) {
+  if (!cfg.gemini_api_key_set) return alert("Chưa có Gemini API key — dán key trong Cài đặt → AI viết tiêu đề.");
+  btn.disabled = true;
+  btn.textContent = "AI đang viết…";
+  const tabAtStart = tab;
+  try {
+    await api("/api/ai-titles", { ids: [id] });
+    delete edits[id];   // chỉ bỏ tiêu đề đang sửa khi server đã nhận yêu cầu (lỗi thì giữ nguyên)
+    // Chờ AI xong (vài giây) rồi vẽ lại bảng
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const s = await api(`/api/status?tab=${tabAtStart}&since=0`);   // đúng tab đã bấm, kể cả khi đã đổi tab
+      if (!s.ai_running) break;
+    }
+    lastSig = "";
+    await poll();
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false;
+    btn.textContent = "✨ Sửa bằng AI";
+  }
+}
+
+async function aiTitles(restore) {
+  syncSelection();
+  const tabAtStart = tab;
+  const ids = [...selected];
+  const warnings = okResults().filter((r) => (edits[r.id] ?? r.title ?? "").length > TITLE_MAX || r.title_warn).map((r) => r.id);
+  if (!restore && !ids.length && !warnings.length) return alert("Không có tiêu đề đang cảnh báo cần sửa.\n\nMuốn sửa tiêu đề khác thì tích ô đầu dòng rồi bấm lại.");
+  const all = ids.length ? ids : restore ? okResults().map((r) => r.id) : warnings;
+  if (!restore && !(await uiConfirm(ids.length ? `Sửa tiêu đề bằng AI cho ${all.length} dòng đã chọn?`
+    : `Sửa bằng AI cho ${all.length} tiêu đề đang cảnh báo cần sửa?`, "Sửa tiêu đề"))) return;
+  if (tab !== tabAtStart) return;
+  try {
+    await saveSettings(true);
+    if (tab !== tabAtStart) return;
+    await api("/api/ai-titles", { ids: all, restore: !!restore });
+    all.forEach((id) => delete edits[id]);   // bỏ tiêu đề đang sửa dở — chỉ khi server đã nhận (lỗi thì giữ)
+    $("#logCard").open = true;
+    lastSig = "";
+    poll();
+  } catch (e) { alert(e.message); }
+}
+// ---------- proxy: chỉ hiện ip:port, user/pass không bao giờ gửi ra giao diện
+function renderProxies() {
+  const list = cfg.proxy_list || [];
+  $("#pxCount").textContent = `${list.length} proxy`;
+  $("#pxSource").textContent = cfg.proxy_source === "file" ? "· đang đọc từ file Proxy.txt cũ — dán vào đây để cất trong tool" : "";
+  $("#pxList").replaceChildren(...list.map((p, i) => {
+    const rm = el("button", { textContent: "✕", title: "Xoá proxy này" });
+    rm.onclick = () => proxyAction("remove", "", i);
+    return el("span", { className: "px-item", title: p.auth ? "Có user/pass (đã ẩn)" : "Không có user/pass" },
+      `${p.addr}${p.auth ? " 🔒" : ""}`, rm);
+  }));
+}
+
+async function proxyAction(action, text, index) {
+  const st = $("#proxyStatus");
+  if (action === "clear" && !(await uiConfirm("Xoá hết proxy trong tool?", "Xoá hết"))) return;
+  if (action === "replace" && !(await uiConfirm("Thay toàn bộ danh sách proxy bằng các dòng vừa dán?", "Thay"))) return;
+  try {
+    const r = await api("/api/proxies", { action, text, index });
+    cfg = r;
+    renderProxies();
+    syncProxyInfo();
+    $("#pxPaste").value = "";
+    st.className = "small " + (r.bad ? "stat err" : "stat ok");
+    st.textContent = action === "add" || action === "replace"
+      ? `✓ Đã nhận ${r.added} proxy${r.bad ? ` · bỏ ${r.bad} dòng sai dạng (cần ip:port:user:pass)` : ""}`
+      : action === "clear" ? "Đã xoá hết proxy" : "Đã xoá 1 proxy";
+  } catch (e) { st.className = "small stat err"; st.textContent = "✗ " + e.message; }
+}
+
+// ---------- proxy riêng theo site (Cài đặt -> Proxy riêng theo site): chỉ hiện ip:port, user/pass cất kín
+const siteLabel = (k) => SITES.find((s) => s.key === k)?.name || k;
+function renderSiteProxies() {
+  const lists = cfg.site_proxy_lists || {};
+  const keys = SITES.map((s) => s.key).filter((k) => (lists[k] || []).length);
+  const rows = $("#spxRows");
+  rows.replaceChildren(...keys.map((k) => {
+    const list = lists[k];
+    const chips = list.map((p, i) => {
+      const rm = el("button", { textContent: "✕", title: "Xoá proxy này" });
+      rm.onclick = () => siteProxyAction(k, "remove", "", i);
+      return el("span", { className: "px-item", title: p.auth ? "Có user/pass (đã ẩn)" : "Không có user/pass" },
+        `${p.addr}${p.auth ? " 🔒" : ""}`, rm);
+    });
+    const res = el("div", { className: "spx-res" });
+    const test = el("button", { className: "mini", textContent: "Kiểm tra", title: "Thử 3 proxy đầu của site này: nước, nhà mạng, có phải IP hosting" });
+    test.onclick = () => testSiteProxy(k, test, res);
+    const add = el("button", { className: "mini", textContent: "+ Thêm", title: "Dán thêm proxy cho site này" });
+    add.onclick = () => { $("#spxSite").value = k; $("#spxPaste").focus(); $("#spxPaste").scrollIntoView({ block: "center" }); };
+    const clear = el("button", { className: "mini danger-text", textContent: "Xoá hết", title: "Bỏ danh sách riêng — site dùng proxy chung" });
+    clear.onclick = () => siteProxyAction(k, "clear");
+    return el("div", { className: "spx-row" },
+      el("div", { className: "nm" }, siteLabel(k), el("small", { textContent: `${list.length} proxy riêng` })),
+      el("div", { className: "px-list" }, ...chips, res),
+      el("div", { className: "row", style: "gap:6px" }, test, add, clear));
+  }));
+  if (!keys.length) rows.replaceChildren(el("div", { className: "muted small", style: "padding:4px 0 8px", textContent: "Chưa có site nào dùng proxy riêng." }));
+  const sel = $("#spxSite"), cur = sel.value;
+  sel.replaceChildren(el("option", { value: "", textContent: "Chọn site…" }),
+    ...SITES.map((s) => el("option", { value: s.key, textContent: s.name + ((lists[s.key] || []).length ? ` (${lists[s.key].length})` : "") })));
+  if (cur) sel.value = cur;
+  $("#spxAdd").onclick = () => siteProxyAction($("#spxSite").value, "add", $("#spxPaste").value);
+}
+
+async function siteProxyAction(site, action, text = "", index) {
+  const st = $("#spxStatus");
+  if (!site) { st.className = "small stat err"; st.textContent = "Chọn site trước"; return; }
+  if (action === "add" && !text.trim()) { st.className = "small stat err"; st.textContent = "Dán proxy vào ô trước"; return; }
+  if (action === "clear" && !(await uiConfirm(`Xoá hết proxy riêng của ${siteLabel(site)}? Site sẽ dùng proxy chung.`, "Xoá hết"))) return;
+  try {
+    const r = await api("/api/site-proxies", { site, action, text, index });
+    cfg = r;
+    renderSiteProxies();
+    syncProxyInfo();
+    if (action === "add" || action === "replace") $("#spxPaste").value = "";
+    st.className = "small " + (r.bad ? "stat err" : "stat ok");
+    st.textContent = action === "add" ? `✓ ${siteLabel(site)}: đã nhận ${r.added} proxy${r.bad ? ` · bỏ ${r.bad} dòng sai dạng (cần ip:port:user:pass)` : ""}`
+      : action === "clear" ? `Đã xoá hết proxy riêng của ${siteLabel(site)}` : `Đã xoá 1 proxy của ${siteLabel(site)}`;
+  } catch (e) { st.className = "small stat err"; st.textContent = "✗ " + e.message; }
+}
+
+async function testSiteProxy(site, btn, out) {
+  btn.disabled = true;
+  out.textContent = "Đang thử…";
+  try {
+    const r = await api("/api/test-proxy", { site });
+    out.textContent = r.lines.join(" · ");
+  } catch (e) { out.textContent = "✗ " + e.message; }
+  btn.disabled = false;
+}
+
+async function testProxy() {
+  const st = $("#proxyStatus");
+  $("#testProxy").disabled = true;
+  st.className = "muted small";
+  st.textContent = "Đang thử…";
+  try {
+    await saveSettings(true);
+    const r = await api("/api/test-proxy", {});
+    st.className = "small";
+    st.textContent = `${r.count} proxy trong file · ` + r.lines.join(" · ");
+  } catch (e) { st.className = "small stat err"; st.textContent = "✗ " + e.message; }
+  $("#testProxy").disabled = false;
+}
+
+// ---------- chạy
+function countLinks() {
+  if (imported) return ($("#linkCount").textContent = `(${imported.items.length} link từ file)`);
+  const n = ($("#links").value.match(/https?:\/\//g) || []).length;
+  $("#linkCount").textContent = n ? `(${n} link)` : "";
+}
+
+async function run() {
+  try {
+    if (imported) {
+      const bad = Object.keys(imported.conflicts || {});
+      if (bad.length) return alert("File import có Profile nhiều Action Country: " + bad.join(", ") + ". Sửa file rồi import lại.");
+    }
+    await saveSettings(true);
+    const r = await api("/api/run", imported
+      ? { items: imported.items, upload: $("#upload").checked }
+      : { links: $("#links").value, upload: $("#upload").checked });
+    edits = {};   // chỉ xoá tiêu đề sửa tay khi lần chạy mới đã được nhận
+    selected.clear();
+    if (imported) { imported = null; renderImport(); renderTabs(); }   // link đã vào lần chạy: tắt chấm "chờ chạy"
+    lastSig = "";
+    $("#logCard").open = true;
+    poll();
+    if (r.skipped && r.skipped.length) alert(`Đang chạy ${r.count} link. Bỏ qua ${r.skipped.length} link:\n\n• ` + r.skipped.join("\n• "));
+  } catch (e) { alert(e.message); }
+}
+
+async function importFile(file) {
+  if (!file) return;
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = () => reject(new Error("Không đọc được file"));
+      fr.readAsDataURL(file);
+    });
+    const r = await api("/api/import", { name: file.name, data });
+    if (!r.items.length) throw new Error("Không có link hợp lệ nào trong file." + (r.warnings.length ? "\n" + r.warnings.join("\n") : ""));
+    const seen = {};
+    r.items.forEach((it) => (seen[it.profile] ??= new Set()).add(it.country));
+    r.conflicts = Object.fromEntries(Object.entries(seen).filter(([, s]) => s.size > 1));
+    imported = { name: file.name, ...r };
+    renderImport();
+    renderTabs();
+  } catch (e) { alert("Import lỗi: " + e.message); }
+  $("#importFile").value = "";
+}
+
+// ---------- Chú thích tab site: cách lấy giá (rê chuột ~0,7 giây mới hiện, đỡ rối mắt)
+let tipTimer = null;
+function tipHide() { clearTimeout(tipTimer); document.getElementById("tabTip")?.remove(); }
+function tipShow(btn, s) {
+  tipHide();
+  tipTimer = setTimeout(() => {
+    const pct = Number(cfg.sites?.[s.key]?.price_percent || cfg.price_percent || 100);
+    const list = s.price_basis === "list";
+    const delay = cfg.sites?.[s.key]?.delay || cfg.delay_seconds;
+    const tip = el("div", { className: "tab-tip", id: "tabTip" },
+      el("b", { className: "t", textContent: s.name }),
+      el("div", { className: "f", textContent: `Giá eBay = ${list ? "giá gốc" : "giá đang bán"} × ${pct}%` }),
+      el("div", { textContent: list
+        ? "Lấy giá gốc, KHÔNG lấy giá sale (site hay sale 1–2 ngày rồi về giá cũ, bán theo giá sale dễ lỗ). Sản phẩm không ghi giá gốc thì lấy giá đang bán."
+        : "Lấy giá đang bán trên site, kể cả khi đang sale." }),
+      el("div", { className: "m", textContent: [cfg.round_99 !== false ? "Làm tròn lên .99" : "", delay ? `nghỉ ${delay} giây giữa các link` : "",
+        cfg.sites?.[s.key]?.use_proxy ? "luôn đi qua proxy" : ""].filter(Boolean).join(" · ") }));
+    const r = btn.getBoundingClientRect();
+    tip.style.left = `${r.right + 12}px`;
+    document.body.append(tip);
+    // tab cuối danh sách: đẩy chú thích lên cho vừa màn hình, mũi tên vẫn chỉ đúng tab
+    const top = Math.max(8, Math.min(r.top - 4, window.innerHeight - tip.offsetHeight - 8));
+    tip.style.top = `${top}px`;
+    tip.style.setProperty("--arrow", `${Math.max(10, r.top + r.height / 2 - top - 5)}px`);
+  }, 700);
+}
+
+// ---------- Hộp thông báo / hỏi lại theo giao diện tool (thay alert / confirm của trình duyệt)
+const UI_KIND = { info: ["i", "Thông báo"], ok: ["✓", "Xong"], warn: ["!", "Lưu ý"], err: ["✕", "Chưa làm được"], ask: ["?", "Xác nhận"] };
+function uiKind(msg) {
+  const m = String(msg || "");
+  if (/đang chạy|chờ xong|đang kiểm tra|chờ tới lượt/i.test(m)) return "warn";
+  if (/^\s*(✓|Đã )/.test(m)) return "ok";
+  if (/lỗi|thất bại|không (được|có|thấy|đọc|nhận|tìm|mở)|chưa (có|chọn|xuất|được|điền|làm)|sai |phải |cần /i.test(m)) return "err";
+  return "info";
+}
+// Đoạn chữ thường: dòng trống tách đoạn, dòng bắt đầu bằng "•" thành danh sách
+function uiText(msg) {
+  return String(msg || "").split(/\n{2,}/).map((block) => {
+    const lines = block.split("\n");
+    const items = lines.filter((l) => /^\s*[•\-]\s/.test(l));
+    if (items.length && items.length >= lines.length - 1) {
+      const head = lines.filter((l) => !/^\s*[•\-]\s/.test(l));
+      return el("div", {}, ...head.map((h) => el("p", { textContent: h })),
+        el("ul", {}, ...items.map((l) => el("li", { textContent: l.replace(/^\s*[•\-]\s/, "") }))));
+    }
+    return el("p", { textContent: block });
+  });
+}
+let uiQueue = Promise.resolve();
+// opts: {kind, title, sub, body (chuỗi | node | [node]), buttons: [{label, value, primary}], hint (node), wide}
+function uiDialog(opts) {
+  const run = () => new Promise((resolve) => {
+    const kind = opts.kind || "info";
+    const [ic, defTitle] = UI_KIND[kind] || UI_KIND.info;
+    const btns = opts.buttons || [{ label: "OK", value: true, primary: true }];
+    const ov = el("div", { className: "ui-ov" });
+    const close = (v) => { ov.remove(); document.removeEventListener("keydown", key, true); resolve(v); };
+    const cancelV = btns.find((b) => !b.primary)?.value ?? (btns.length === 1 ? btns[0].value : false);
+    const key = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(cancelV); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); close((btns.find((b) => b.primary) || btns[0]).value); }
+    };
+    const body = typeof opts.body === "string" || opts.body == null ? uiText(opts.body) : [].concat(opts.body);
+    const x = el("button", { className: "ui-x", textContent: "✕", title: "Đóng" });
+    x.onclick = () => close(cancelV);
+    const ft = el("div", { className: "ui-ft" }, ...(opts.hint ? [opts.hint] : []), ...btns.map((b) => {
+      const bt = el("button", { className: b.primary ? "primary" : "", textContent: b.label });
+      bt.onclick = () => close(b.value);
+      return bt;
+    }));
+    ov.append(el("div", { className: "ui-dlg" + (opts.wide ? " wide" : ""), role: "dialog" },
+      el("div", { className: "ui-hd" }, el("div", { className: "ui-ic " + (kind === "ask" ? "" : kind), textContent: ic }),
+        el("div", { style: "min-width:0" }, el("p", { className: "ui-ttl", textContent: opts.title || defTitle }),
+          opts.sub ? el("div", { className: "ui-sub", textContent: opts.sub }) : ""), x),
+      el("div", { className: "ui-body" }, ...body), ft));
+    ov.onclick = (e) => { if (e.target === ov && btns.length === 1) close(cancelV); };
+    document.body.append(ov);
+    document.addEventListener("keydown", key, true);
+    ft.querySelector("button.primary")?.focus();
+  });
+  uiQueue = uiQueue.then(run, run);
+  return uiQueue;
+}
+const UI_TITLE = (m) => /đang chạy|chờ xong/i.test(m) ? "Đang chạy" : undefined;
+window.alert = (msg) => { uiDialog({ kind: uiKind(msg), title: UI_TITLE(String(msg)), body: String(msg ?? "") }); };
+// Kết quả "Xuất CSV" bằng hộp theme của app (gọi thẳng uiDialog, không qua alert: trong cửa sổ tool từng bật hộp Windows).
+// r.errors = listing bị bỏ thật, r.notes = chỉ để biết, listing vẫn xuất (FCC ID, đổi SKU, file danh sách trùng)
+function showExportResult(r, n, picked) {
+  const bad = r.errors || [], notes = r.notes || [];
+  const sec = (title, cls, list) => list.length ? [el("p", { style: "margin-top:10px" }, el("b", { className: cls, textContent: title })),
+    ...list.flatMap((m) => uiText(m))] : [];
+  uiDialog({
+    kind: bad.length ? "err" : notes.length ? "warn" : "ok",
+    title: `Đã xuất ${n} ${picked ? "dòng đã tích" : "dòng"} vào ${r.files.length} file` + (bad.length ? ` · ${bad.length} listing không xuất được` : ""),
+    sub: r.folder,
+    wide: true,
+    body: [el("ul", {}, ...r.files.map((f) => el("li", { textContent: f }))),
+      ...sec(`Không xuất được (${bad.length}) — sửa trong bảng rồi Xuất CSV lại`, "st-err", bad),
+      ...sec(`Lưu ý (${notes.length}) — các listing này vẫn có trong file`, "", notes)],
+    buttons: [{ label: "Đã hiểu", value: true, primary: true }],
+  });
+}
+function uiConfirm(msg, ok = "Đồng ý", cancel = "Huỷ") {
+  return uiDialog({ kind: "ask", body: msg, buttons: [{ label: cancel, value: false }, { label: ok, value: true, primary: true }] });
+}
+
+// ---------- Nhập file tổng: chia link về từng site
+const readData = (file) => new Promise((resolve, reject) => {
+  const fr = new FileReader();
+  fr.onload = () => resolve(fr.result);
+  fr.onerror = () => reject(new Error("Không đọc được file"));
+  fr.readAsDataURL(file);
+});
+function showImportAll(name, r, keys) {
+  const total = keys.reduce((n, k) => n + r.sites[k].items.length, 0);
+  const rows = keys.map((k) => {
+    const i = SITES.findIndex((s) => s.key === k), s = SITES[i];
+    const go = el("span", { className: "go", textContent: "Mở tab →" });
+    go.onclick = () => { document.querySelector(".ui-ov .ui-x")?.click(); showTrack(false); switchTab(k); };
+    return el("div", { className: "imp-site" },
+      el("span", { className: "ico", style: `background:${ICON_COLORS[i % ICON_COLORS.length]}`,
+        textContent: s.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() }),
+      el("div", { style: "min-width:0" }, el("div", { className: "nm", textContent: s.name }),
+        el("div", { className: "pf" }, ...Object.entries(r.sites[k].summary).map(([p, n]) => el("span", { textContent: `${p} · ${n}` })))),
+      el("div", { className: "n" }, String(r.sites[k].items.length), el("small", { textContent: "link" })), go);
+  });
+  const skip = r.skipped.length ? [el("div", { className: "imp-skip" }, el("b", { textContent: `Bỏ qua ${r.skipped.length} dòng` }),
+    ...r.skipped.slice(0, 12).map((s) => el("div", { textContent: s })), r.skipped.length > 12 ? el("div", { textContent: "…" }) : "")] : [];
+  uiDialog({ kind: "info", wide: true, title: `Đã chia ${total} link về ${keys.length} site`, sub: `${name} · theo cột Site (ô trống nhận theo link)`,
+    body: [...rows, ...skip], hint: el("span", { className: "hint" }, el("span", { className: "gdot" }), "Vào từng tab có chấm xanh để bấm Chạy"),
+    buttons: [{ label: "Đã hiểu", value: true, primary: true }] });
+}
+function setImported(key, obj) {
+  if (key === tab) { imported = obj; renderImport(); }
+  else tabState[key] = { links: "", edits: {}, selected: new Set(), ...(tabState[key] || {}), imported: obj };
+}
+async function importAll(file) {
+  if (!file) return;
+  try {
+    const r = await api("/api/import-all", { name: file.name, data: await readData(file) });
+    const keys = Object.keys(r.sites);
+    if (!keys.length) throw new Error("Không có link hợp lệ nào trong file." + (r.skipped.length ? "\n" + r.skipped.slice(0, 10).join("\n") : ""));
+    keys.forEach((k) => {
+      const x = r.sites[k], seen = {};
+      x.items.forEach((it) => (seen[it.profile] ??= new Set()).add(it.country));
+      x.conflicts = Object.fromEntries(Object.entries(seen).filter(([, s]) => s.size > 1));
+      setImported(k, { name: file.name, ...x });
+    });
+    renderTabs();
+    showImportAll(file.name, r, keys);
+  } catch (e) { alert("Nhập file tổng lỗi: " + e.message); }
+  $("#importAll").value = "";
+}
+function renderImport() {
+  const on = !!imported;
+  $("#importBox").hidden = !on;
+  $("#links").disabled = on;
+  if (on) {
+    $("#importName").textContent = `📄 ${imported.name} — ${imported.items.length} link`;
+    $("#importSummary").textContent = "· " + Object.entries(imported.summary).map(([p, n]) => `${p}: ${n}`).join(" · ");
+    $("#importWarn").replaceChildren(...imported.warnings.map((w) => el("div", { textContent: "⚠ " + w })));
+  }
+  countLinks();
+}
+
+// ---------- kết quả
+const okResults = () => lastResults.filter((r) => r.status === "ok");
+
+function statusCell(r) {
+  if (r.status === "running") return el("span", { className: "st-run", textContent: "Đang xử lý…" });
+  if (r.status === "error") return el("span", { className: "st-err", textContent: "✗ " + r.error });
+  const wrap = el("div", {}, r.problem ? el("span", { className: "st-warn", textContent: "⚠ Cần sửa" })
+    : el("span", { className: "st-ok", textContent: "✓ Sẵn sàng" }));
+  if (r.problem) {
+    // Rút gọn: "Thiếu item specifics bắt buộc của Category X: A, B — ..." -> "Thiếu: A, B"
+    const m = r.problem.match(/Thiếu item specifics bắt buộc[^:]*:\s*([^—]+)/);
+    wrap.append(el("div", { className: "st-detail warn", textContent: m ? `Thiếu: ${m[1].trim()} — bấm Xem` : r.problem, title: r.problem }));
+  }
+  if (r.note) wrap.append(el("div", { className: "st-detail", textContent: /Chưa up ảnh/.test(r.note) ? "ảnh gốc của site (chưa up)" : r.note, title: r.note }));
+  if (r.fcc === "missing") wrap.append(el("div", { className: "st-detail warn", textContent: "⚠ Thiếu FCC ID — bấm Xem",
+    title: "Sản phẩm có Wi-Fi / Bluetooth: eBay Mỹ bắt ghi FCC ID đúng model, thiếu thì listing bị báo vi phạm và bị ẩn. "
+      + "FCC ID in trên nhãn máy / hộp / sách hướng dẫn, hoặc tra ở fcc.gov/oet/ea/fccid." }));
+  return wrap;
+}
+
+function countryConflicts(results) {
+  const seen = {};
+  results.filter((r) => r.status === "ok").forEach((r) => (seen[r.profile || ""] ??= new Set()).add(r.country || "US"));
+  return Object.fromEntries(Object.entries(seen).filter(([, s]) => s.size > 1).map(([p, s]) => [p, [...s]]));
+}
+
+async function saveRows(ids, changes) {
+  try {
+    await api("/api/rows", { ids, changes });
+    lastSig = "";
+    await poll();
+    return true;
+  } catch (e) { alert(e.message); lastSig = ""; poll(); return false; }
+}
+
+function syncSelection() {
+  // chỉ tính các dòng đang hiện (đang lọc theo nhóm thì dòng bị ẩn không còn được chọn -> thao tác hàng loạt
+  // không đụng dòng mày không thấy); bảng chưa tải (vừa đổi tab) thì giữ nguyên lựa chọn của tab
+  const ok = okResults().filter(rowShown).map((r) => r.id);
+  if ((lastResults || []).length) [...selected].forEach((id) => { if (!ok.includes(id)) selected.delete(id); });
+  $("#bulkBar").hidden = !ok.length;
+  $("#bulkCount").textContent = selected.size;
+  $("#bulkApply").disabled = !selected.size;
+  updateAiTitleButton();
+  exportLabel();
+  const all = $("#selAll");
+  all.checked = ok.length > 0 && selected.size === ok.length;
+  all.indeterminate = selected.size > 0 && selected.size < ok.length;
+  document.querySelectorAll("#results tr[data-id]").forEach((tr) => {
+    const on = selected.has(tr.dataset.id);
+    tr.classList.toggle("picked", on);
+    const box = tr.querySelector("td.sel input");
+    if (box) box.checked = on;
+  });
+}
+
+function updateAiTitleButton() {
+  const btn = $("#aiBtn");
+  btn.textContent = btn.dataset.busy === "true" ? "✨ AI đang viết…"
+    : `✨ Sửa tiêu đề AI${selected.size ? ` (${selected.size})` : ""}`;
+}
+
+async function applyBulk() {
+  const changes = {};
+  const p = $("#bulkProfile").value.trim(), c = $("#bulkCountry").value.trim().toUpperCase(), cat = $("#bulkCategory").value.trim();
+  if (p) changes.profile = p;
+  if (c) changes.country = c;
+  if (cat) changes.category = cat;
+  if (!Object.keys(changes).length) return alert("Điền Profile, Action Country và/hoặc Category để áp dụng.");
+  if (await saveRows([...selected], changes)) { selected.clear(); syncSelection(); }
+}
+
+function editInput(r, key, value, ph, cls) {
+  const i = el("input", { type: "text", className: cls || "", value: value || "", placeholder: ph, spellcheck: false });
+  i.dataset.id = r.id;
+  i.dataset.key = key;
+  i.addEventListener("change", () => saveRows([r.id], { [key]: key === "country" ? i.value.toUpperCase() : i.value }));
+  i.addEventListener("keydown", (e) => { if (e.key === "Enter") i.blur(); });
+  return i;
+}
+
+function accCell(r, conflicts) {
+  if (r.status !== "ok") return el("div", { className: "small muted", textContent: [r.profile, r.country].filter(Boolean).join(" · ") });
+  const cc = editInput(r, "country", r.country, "US", "cc");
+  cc.maxLength = 2;
+  const bad = conflicts[r.profile || ""];
+  if (bad) { cc.classList.add("bad"); cc.title = `Profile ${r.profile || "(trống)"} đang có nhiều Country: ${bad.join(", ")}`; }
+  return el("div", { className: "accrow" }, editInput(r, "profile", r.profile, "Profile", "pf"), cc);
+}
+
+function catCell(r) {
+  if (r.status !== "ok") return "";
+  const i = editInput(r, "category", r.category, r.category_auto || "Category ID");
+  const missing = !r.category && !r.category_auto;
+  if (missing) i.classList.add("bad");
+  // Dòng chưa có Category (thường do eBay API hết hạn mức / mất mạng lúc chạy): nút hỏi lại ngay trong ô
+  const retry = missing ? el("button", { className: "mini", textContent: "↻ Hỏi lại", title: "Hỏi lại eBay Category cho dòng này",
+    onclick: () => resuggest([r.id]) }) : "";
+  // Gợi ý của eBay: bấm vào ô -> chọn trong danh sách (hoặc gõ ID khác)
+  const opts = r.category_options || [];
+  if (opts.length) {
+    const dl = el("datalist", { id: "dl-" + r.id }, ...opts.map((o) => el("option", { value: o.id, label: o.path })));
+    i.setAttribute("list", dl.id);
+    i.title = "Gợi ý của eBay:\n" + opts.map((o) => `${o.id} — ${o.path}`).join("\n");
+    const hint = r.category ? "gõ tay" : r.category_src || "";
+    return el("div", {}, i, dl, el("div", { className: "hint", textContent: hint.replace(/^eBay gợi ý: /, "").split(" › ").slice(-2).join(" › "), title: hint }), retry);
+  }
+  const hint = r.category ? "gõ tay" : r.category_auto ? (r.category_src || "") : "chưa có — gõ ID hoặc bấm Hỏi lại";
+  return el("div", {}, i, el("div", { className: "hint", textContent: hint, title: hint }), retry);
+}
+
+// Hỏi lại eBay Category (ids = các dòng chọn; không truyền = mọi dòng đang thiếu)
+let catBusy = false;
+async function resuggest(ids) {
+  const bar = $("#catBar");
+  catBusy = true;
+  bar.hidden = false; bar.className = "conflict info";
+  bar.textContent = "Đang hỏi eBay Category… (mỗi dòng 1 lượt gọi, vài giây)";
+  try {
+    const r = await api("/api/resuggest", ids ? { ids } : {});
+    lastSig = "";
+    if (r.error) {
+      bar.className = "conflict";
+      bar.textContent = `⚠ Hỏi được ${r.fixed}/${r.asked} dòng, còn ${r.left} dòng thiếu. Lý do: ${r.error}`;
+    } else {
+      bar.className = "conflict done";
+      bar.textContent = `✓ Đã bổ sung Category cho ${r.fixed}/${r.asked} dòng` + (r.left ? ` · còn ${r.left} dòng eBay không gợi ý được (gõ ID tay)` : "");
+    }
+  } catch (e) {
+    bar.className = "conflict";
+    bar.textContent = "⚠ " + e.message;
+  } finally {
+    catBusy = false;
+    await poll();
+  }
+}
+
+function varCell(r) {
+  if (r.status !== "ok") return "";
+  const parts = [r.n_colors ? `${r.n_colors} màu` : "", r.n_sizes ? `${r.n_sizes} size` : "", `chọn ${r.n_variants}/${r.n_all || r.n_variants} biến thể`].filter(Boolean);
+  const box = el("div", {}, el("div", { textContent: parts.join(" · ") }), el("b", { textContent: r.price_text || "" }));
+  if (r.page_codes && r.page_codes.length) {
+    // Trang bộ sưu tập: tổng số món trên link + bao nhiêu món khác đã có trong bảng
+    // cùng quy tắc với khung trong cửa sổ Xem: dòng đã xong / đang chạy theo mã
+    const have = new Set((lastResults || []).filter((x) => x.status === "ok").map((x) => x.pcode));   // mã gốc trên site
+    const added = r.page_codes.filter((c) => have.has(c)).length;
+    const rest = r.page_codes.length - added;
+    const a = el("a", { href: "#", className: "page-items",
+      textContent: `📦 Trang có ${r.page_codes.length + 1} món` + (rest ? ` · còn ${rest} món chưa thêm` : " · đã thêm đủ"),
+      title: "Bấm để xem các món cùng trang và thêm vào bảng" });
+    a.onclick = async (e) => {
+      e.preventDefault();
+      await openPreview(r.id);
+      $("#piBox").scrollIntoView({ block: "center" });
+    };
+    box.append(el("div", {}, a));
+  }
+  return box;
+}
+
+// Nút Xuất CSV ghi rõ sẽ xuất bao nhiêu dòng: có tích dòng -> chỉ xuất các dòng đó, không tích -> tất cả
+let exportingN = 0;
+function exportLabel() {
+  const b = $("#reexport");
+  if (exporting) { b.textContent = `⏳ Đang xuất ${exportingN} dòng…`; return; }
+  const n = selected.size, all = okResults().length;
+  b.textContent = n ? `💾 Xuất CSV (${n} dòng đã tích)` : `💾 Xuất CSV (tất cả ${all})`;
+  b.title = n ? `Chỉ xuất ${n} dòng đã tích — bỏ tích hết để xuất tất cả` : "Xuất CSV tất cả listing — hỏi chọn thư mục lưu, mỗi Profile 1 file. Tích dòng để chỉ xuất các dòng đó";
+}
+
+function updateExportState() {
+  const s = lastStatus;
+  if (!s) return;
+  const pending = Object.keys(edits).length > 0 || s.dirty;
+  const hasOk = s.results.some((r) => r.status === "ok");
+  $("#reexport").disabled = s.running || !hasOk || !s.run_id || exporting;
+  exportLabel();
+  const info = $("#outInfo");
+  if (!s.run_id) return info.replaceChildren();
+  const lines = [];
+  if (s.orig_files.length) lines.push(el("div", {}, "CSV gốc (tự lưu lúc chạy xong): ", el("b", { textContent: `output\\${tab}\\goc\\${s.run_id}\\` }), " · " + s.orig_files.join(", ")));
+  else lines.push(el("div", { className: "err", textContent: "Chưa có CSV gốc (listing thiếu Category…) — sửa trong bảng rồi bấm Xuất CSV." }));
+  if (s.export_files.length) lines.push(el("div", {}, "Đã xuất: ", el("b", { textContent: s.export_folder + "\\" }), " · " + s.export_files.join(", ")));
+  if (pending) lines.push(el("div", { className: "pending", textContent: "Có thay đổi (tiêu đề / Category / Profile / cài đặt…) chưa xuất — bấm \"Xuất CSV\" để lưu file mới." }));
+  lines.push(el("div", { textContent: "Mỗi lần chạy chỉ up 1 bộ lên eBay: bộ gốc HOẶC bộ đã xuất (up cả hai sẽ bị trùng listing)." }));
+  info.replaceChildren(...lines);
+}
+
+function renderSummary(results) {
+  const ok = results.filter((r) => r.status === "ok" && !r.problem).length;
+  const fix = results.filter((r) => r.status === "ok" && r.problem).length;
+  const err = results.filter((r) => r.status === "error").length;
+  const run = results.filter((r) => r.status === "running").length;
+  const chips = [];
+  if (ok) chips.push(el("span", { className: "chip ok", textContent: `✓ ${ok} sẵn sàng xuất` }));
+  if (fix) chips.push(el("span", { className: "chip warn", textContent: `⚠ ${fix} cần sửa`, title: "Thiếu Category / item specifics — bấm Xem ở dòng viền vàng" }));
+  if (err) chips.push(el("span", { className: "chip err", textContent: `✗ ${err} lỗi / bỏ qua` }));
+  if (run) chips.push(el("span", { className: "chip", textContent: `${run} đang xử lý` }));
+  const nFcc = results.filter((r) => r.fcc === "missing").length;
+  if (!nFcc && rowFilter?.fcc) rowFilter = null;   // đã điền hết -> bỏ lọc, không để bảng trống
+  if (nFcc) {
+    const c = el("span", { className: "chip warn click" + (rowFilter?.fcc ? " on" : ""), textContent: `⚠ ${nFcc} thiếu FCC ID`,
+      title: "Sản phẩm có Wi-Fi / Bluetooth chưa điền FCC ID (eBay Mỹ sẽ báo vi phạm và ẩn listing) — bấm để lọc các dòng này" });
+    c.onclick = () => setRowFilter(rowFilter?.fcc ? null : { fcc: true });
+    chips.push(c);
+  }
+  $("#summary").replaceChildren(...chips);
+  // Ô số liệu đầu trang
+  const accs = new Set(results.filter((r) => r.status === "ok").map((r) => r.profile || "")).size;
+  const kpi = (cls, ico, val, lbl) => el("div", { className: "kpi " + cls }, el("div", { className: "k-ico", textContent: ico }),
+    el("div", { style: "min-width:0" }, el("div", { className: "k-val", textContent: val }), el("div", { className: "k-lbl", textContent: lbl })));
+  $("#kpis").replaceChildren(
+    kpi("all", "▤", results.length, run ? `listing · ${run} đang chạy` : "listing trong bảng"),
+    kpi("ok", "✓", ok, "sẵn sàng xuất"),
+    kpi("warn", "!", fix, "cần sửa"),
+    kpi("err", "✕", err, "lỗi / bỏ qua"),
+    kpi("acc", "◎", accs, "tài khoản (Profile)"));
+  renderTitleGroups(results);
+}
+
+// ---------- chữ loại hàng tool tự ghép vào tiêu đề: gom theo nhóm + lọc bảng (xem theo nhóm thay vì từng dòng)
+let rowFilter = null;   // null | {add: "Wireless Speaker"} | {warn: true} | {fcc: true}
+
+function rowShown(r) {
+  if (!rowFilter) return true;
+  if (rowFilter.fcc) return r.fcc === "missing";
+  if (rowFilter.warn) return r.status === "ok" && !!r.title_warn;
+  return r.status === "ok" && (r.title_add || "") === rowFilter.add;
+}
+
+function setRowFilter(f) {
+  rowFilter = f;
+  renderResults(lastResults);
+}
+
+function renderTitleGroups(results) {
+  const ok = results.filter((r) => r.status === "ok");
+  const box = $("#titleGroups");
+  // lọc "thiếu FCC ID" do nút ở dòng tóm tắt quản lý (renderSummary), không đụng ở đây
+  if (!ok.some((r) => r.title_add)) { box.hidden = true; if (!rowFilter?.fcc) rowFilter = null; return; }
+  const counts = new Map();
+  ok.forEach((r) => counts.set(r.title_add || "", (counts.get(r.title_add || "") || 0) + 1));
+  const nWarn = ok.filter((r) => r.title_warn).length;
+  // nhóm đang lọc không còn dòng nào (đã sửa hết ⚠, chạy lại...) -> tự bỏ lọc, không để bảng trống
+  if (rowFilter && !rowFilter.fcc && (rowFilter.warn ? !nWarn : !counts.has(rowFilter.add))) rowFilter = null;
+  const chip = (text, f, on, cls = "") => {
+    const b = el("button", { className: "mini tg " + cls + (on ? " on" : ""), textContent: text });
+    b.onclick = () => setRowFilter(on ? null : f);
+    return b;
+  };
+  const items = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([add, n]) =>
+    chip(`${add ? "＋" + add : "(không ghép)"} × ${n}`, { add }, rowFilter && !rowFilter.warn && !rowFilter.fcc && rowFilter.add === add));
+  if (nWarn) items.unshift(chip(`⚠ ${nWarn} cần xem tiêu đề`, { warn: true }, !!rowFilter?.warn, "warn"));
+  box.hidden = false;
+  box.replaceChildren(el("span", { className: "small muted", textContent: "Tool ghép loại hàng vào tiêu đề — bấm 1 nhóm để lọc bảng:" }),
+    ...items, rowFilter ? chip("✕ Bỏ lọc", null, false, "clear") : "");
+}
+
+function renderResults(results) {
+  lastResults = results;
+  renderSummary(results);
+  const tb = $("#results");
+  if (!results.length) {
+    tb.replaceChildren(el("tr", {}, el("td", { colSpan: 10, className: "empty", textContent: "Chưa có kết quả" })));
+    $("#conflictBar").hidden = true;
+    if (!catBusy) $("#catBar").hidden = true;
+    syncSelection();
+    return;
+  }
+  // dòng đã chạy xong nhưng chưa có Category: thanh cảnh báo + nút hỏi lại hàng loạt
+  const noCat = results.filter((r) => r.status === "ok" && !r.category && !r.category_auto).length;
+  if (!catBusy) {
+    const cb = $("#catBar");
+    if (!noCat && !cb.classList.contains("done")) cb.hidden = true;
+    if (noCat) {
+      cb.hidden = false; cb.className = "conflict";
+      cb.replaceChildren(`⚠ ${noCat} dòng chưa có Category (thường do eBay API hết hạn mức gọi trong ngày, hoặc key sai) — chưa xuất được. `,
+        el("button", { textContent: "↻ Hỏi lại Category cho các dòng thiếu", onclick: () => resuggest() }));
+    }
+  }
+  const conflicts = countryConflicts(results);
+  $("#conflictBar").hidden = !Object.keys(conflicts).length;
+  $("#conflictBar").textContent = "⚠ Mỗi Profile chỉ được 1 Action Country (nằm ở dòng đầu file CSV). Đang lệch: "
+    + Object.entries(conflicts).map(([p, c]) => `${p || "(trống)"} → ${c.join(" / ")}`).join(" · ") + ". Sửa ô Country tô đỏ rồi mới xuất được.";
+  const act0 = document.activeElement;
+  // ô đang gõ dở (Profile / Country / Category / tiêu đề): giữ chữ đang gõ + vị trí con trỏ qua lần vẽ lại bảng
+  const typing = act0?.dataset?.id ? { value: act0.value, s: act0.selectionStart, e: act0.selectionEnd } : null;
+  const focusKey = act0?.dataset?.id ? `${act0.dataset.id}|${act0.dataset.key || "title"}` : null;
+  const shown = results.map((r, i) => [r, i]).filter(([r]) => rowShown(r));   // số thứ tự giữ đúng dòng trong bảng đầy đủ
+  tb.replaceChildren(...shown.map(([r, i]) => {
+    const img = r.pic ? el("a", { href: r.pic, target: "_blank", title: "Mở ảnh lớn" }, el("img", { src: thumb(r.pic), alt: "", loading: "lazy" })) : "";
+    let titleCell;
+    if (r.status === "ok") {
+      const input = el("input", { type: "text", value: edits[r.id] ?? r.title });
+      input.dataset.id = r.id;
+      const count = el("span", { className: "count" });
+      // Dài quá 80: ô đỏ + nút "Sửa bằng AI" (chỉ viết lại đúng dòng này)
+      const fix = el("button", { className: "mini ai-fix", textContent: "✨ Sửa bằng AI",
+        title: "Nhờ AI viết lại tiêu đề này cho vừa 80 ký tự" });
+      fix.onclick = () => aiFixOne(r.id, fix);
+      const upd = () => {
+        const over = input.value.length > TITLE_MAX;
+        count.textContent = `${input.value.length}/${TITLE_MAX}`;
+        count.classList.toggle("over", over);
+        input.classList.toggle("over", over);
+        fix.hidden = !over;
+      };
+      input.addEventListener("input", () => { edits[r.id] = input.value; upd(); updateExportState(); });
+      upd();
+      const meta = el("div", { className: "src" }, el("a", { href: r.url, target: "_blank", textContent: r.code ? `mã ${r.code}` : r.url }));
+      if (r.title_src === "ai") meta.append(el("span", { className: "ai-tag", textContent: "✨ AI", title: "Tiêu đề gốc: " + (r.title_orig || "") }));
+      if (r.title_add) meta.append(el("span", { className: "add-tag", textContent: `＋${r.title_add}`, title: "Chữ tool tự ghép vào tiêu đề (tên trên site không có)" }));
+      if (r.title_warn) meta.append(el("span", { className: "warn-tag", textContent: "⚠ kiểm tra tiêu đề", title: r.title_warn }));
+      titleCell = el("td", { className: "title-cell" }, el("div", { className: "title-wrap" }, input, count, fix), meta);
+    } else {
+      titleCell = el("td", {}, el("a", { className: "src", href: r.url, target: "_blank", textContent: r.url }));
+    }
+    let act = "";
+    if (r.status === "ok") { act = el("button", { textContent: "Xem" }); act.onclick = () => openPreview(r.id); }
+    let pick = "";
+    if (r.status === "ok") {
+      pick = el("input", { type: "checkbox", checked: selected.has(r.id) });
+      pick.onchange = () => { pick.checked ? selected.add(r.id) : selected.delete(r.id); syncSelection(); };
+    }
+    // Ô SKU: rê chuột sáng xanh, bấm trái là chép SKU (báo "✓ đã chép" 1 giây rồi trả lại)
+    const skuTd = el("td", { className: "sku" + (r.sku ? " copyable" : ""), textContent: r.sku || "—", title: r.sku ? "Bấm để chép SKU" : "" });
+    if (r.sku) skuTd.onclick = async () => {
+      const ok = await copyText(r.sku);
+      skuTd.classList.add("copied");
+      skuTd.textContent = ok ? "✓ đã chép" : "✗ không chép được";
+      setTimeout(() => { skuTd.classList.remove("copied"); skuTd.textContent = r.sku; }, 900);
+    };
+    const tr = el("tr", {},
+      el("td", { className: "sel" }, pick),
+      el("td", { className: "num", textContent: i + 1 }),
+      el("td", { className: "img" }, img),
+      skuTd,
+      titleCell,
+      el("td", { className: "acc" }, accCell(r, conflicts)),
+      el("td", { className: "cat" }, catCell(r)),
+      el("td", { className: "var" }, varCell(r)),
+      el("td", { className: "status" }, statusCell(r)),
+      el("td", { className: "act" }, act));
+    if (r.status === "ok") tr.dataset.id = r.id;
+    if (r.url) tr.oncontextmenu = (e) => {   // chuột phải: Copy link (+ Thử lại nếu dòng lỗi); trong ô nhập thì giữ menu dán/chép thường
+      if (e.target.closest("input,textarea,select")) return;   // bấm lên chính link vẫn hiện menu (dòng lỗi chỉ có link)
+      showRetryMenu(e, r);
+    };
+    if (r.status === "error") tr.classList.add("has-error");
+    else if (r.problem) tr.classList.add("has-problem");
+    return tr;
+  }));
+  syncSelection();
+  if (focusKey) {
+    const [fid, fkey] = focusKey.split("|");
+    const again = fkey === "title" ? tb.querySelector(`.title-wrap input[data-id="${CSS.escape(fid)}"]`)
+      : tb.querySelector(`input[data-id="${CSS.escape(fid)}"][data-key="${fkey}"]`);
+    if (again) {
+      if (typing) again.value = typing.value;
+      again.focus();
+      try { again.setSelectionRange(typing?.s ?? again.value.length, typing?.e ?? again.value.length); } catch {}
+    }
+  }
+}
+
+function appendLogs(logs) {
+  const box = $("#log");
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+  for (const l of logs) {
+    const line = el("div", { className: l.tag || "" });
+    line.append(el("span", { className: "t", textContent: l.t + "  " }), l.text);
+    box.append(line);
+  }
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function poll() {
+  if (!tab) return;
+  let s;
+  const askedTab = tab;
+  try { s = await api(`/api/status?tab=${tab}&since=${logSince}`); } catch { return; }
+  if (askedTab !== tab) return;
+  appendLogs(s.logs);
+  logSince = s.log_total;
+  const sig = JSON.stringify(s.results.map((r) => [r.status, r.sku, r.title, r.pic, r.error, r.profile, r.country, r.category, r.category_auto, r.price_text, r.note, r.problem, r.title_src, r.title_add, r.title_warn, r.fcc]));
+  if (sig !== lastSig) { renderResults(s.results); lastSig = sig; }
+  lastStatus = s;
+  const [done, total] = s.progress;
+  $("#bar").style.width = total ? (done / total * 100) + "%" : "0";
+  $("#progressText").textContent = total ? `${done}/${total}` : "";
+  // Chạy xong link nhưng tab còn bận (kiểm ảnh, AI, ghi CSV): nói rõ đang làm gì, vì sao nút Sửa AI / Chạy lại chưa bấm được
+  const phase = s.phase || (s.ai_running ? "AI đang viết tiêu đề" : "");
+  $("#phaseText").hidden = !phase;
+  $("#phaseText").textContent = phase ? `${phase}… — xong mới sửa AI / chạy lại được` : "";
+  $("#run").disabled = s.running;
+  $("#busyBanner").hidden = !s.busy_other;
+  $("#busyBanner").textContent = s.busy_other ? `Tab ${s.busy_other} đang chạy — chờ xong mới chạy được tab này (vẫn xem và sửa kết quả được).` : "";
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    const on = s.running_tabs.includes(b.dataset.tab);
+    const dot = b.querySelector(".dot");
+    if (on && !dot) b.append(el("span", { className: "dot" }));
+    if (!on && dot) dot.remove();
+  });
+  $("#stop").disabled = !s.running && !s.ai_running;
+  const isPending = (r) => r.status === "error" && /^(Chưa chạy|Đã dừng)/.test(r.error || "");
+  const nPending = s.results.filter(isPending).length;
+  const nErr = s.results.filter((r) => r.status === "error").length - nPending;
+  $("#resumeBtn").hidden = !nPending || s.running;
+  $("#resumeBtn").textContent = `▶ Chạy tiếp ${nPending} link`;
+  $("#resumeBtn").disabled = !!s.busy_other || s.ai_running;
+  $("#retryBtn").hidden = !nErr || s.running;
+  $("#retryBtn").textContent = `↻ Chạy lại ${nErr} dòng lỗi`;
+  $("#retryBtn").disabled = !!s.busy_other || s.ai_running;
+  $("#aiBtn").disabled = s.running || s.ai_running;
+  $("#aiBtn").dataset.busy = String(!!s.ai_running);
+  updateAiTitleButton();
+  updateExportState();
+}
+
+// ---------- xem trước listing
+let pvIndex = -1, pv = null, pvColor = null, pvSize = null, pvImgIdx = 0, pvSeq = 0;
+
+async function openPreview(id) {
+  pvIndex = okResults().findIndex((r) => r.id === id);
+  $("#modal").hidden = false;
+  document.body.style.overflow = "hidden";
+  await loadPreview();
+}
+// Bảng Kết quả được vẽ lại mỗi giây (dòng có thể dịch chỗ) -> luôn xác định dòng đang xem theo id, không theo vị trí
+async function pvMove(step) {
+  if (selectionChanged() && !(await uiConfirm("Lựa chọn biến thể chưa lưu — bỏ thay đổi và sang sản phẩm khác?", "Bỏ thay đổi"))) return;
+  const list = okResults();
+  const cur = pv ? list.findIndex((r) => r.id === pv.id) : -1;
+  pvIndex = (cur >= 0 ? cur : pvIndex) + step;
+  if (pvIndex >= 0 && pvIndex < list.length) loadPreview();
+}
+async function loadPreview() {
+  const r = okResults()[pvIndex];
+  if (!r) return closePreview();
+  const seq = ++pvSeq;   // bấm Trước/Sau liên tục: chỉ nhận kết quả của lần bấm cuối
+  let data;
+  try { data = await api("/api/preview", { id: r.id, title: edits[r.id] }); } catch (e) { alert(e.message); return closePreview(); }
+  if (seq !== pvSeq) return;
+  pv = data;
+  pv.id = r.id;
+  pvColor = null; pvSize = null; pvImgIdx = 0;
+  vsPick = new Set((pv.all_variants || []).filter((v) => v.selected).map((v) => v.key));
+  flt = { colors: new Set(pv.filters?.colors || []), groups: new Set(pv.filters?.groups || []) };
+  if (photo.id !== pv.id) { photo.id = pv.id; photo.tried = new Set(); photo.st = null; clearTimeout(photo.timer); clearTimeout(photo.hideT); }
+  renderPreview();
+  renderSpecs();
+  renderFilters();
+  if (pv.photo_job) photoUpdate(pv.photo_job);   // đang tải dở (đã đóng / chuyển dòng rồi mở lại) -> hiện tiếp tiến trình
+  else renderPhotos();
+  renderVariantPicker();
+  piPick = new Set();
+  $("#piStatus").textContent = "";
+  renderPageItems();
+}
+
+// ---------- chọn giống trang gốc: nhóm size + màu (mặc định chọn hết)
+let flt = { colors: new Set(), groups: new Set() };
+
+function fltChips(box, items, set, label = (x) => x) {
+  const allOn = items.every((x) => set.has(x));
+  const all = el("button", { className: "all" + (allOn ? " on" : ""), textContent: "Tất cả" });
+  all.onclick = () => { items.forEach((x) => set.add(x)); onFilterChange(); };
+  box.replaceChildren(all, ...items.map((x) => {
+    // Bấm 1 nút -> chuyển hẳn sang lựa chọn đó (giống bấm trên site); giữ Ctrl/Shift + bấm -> chọn thêm / bỏ bớt
+    const b = el("button", { className: set.has(x) && !allOn ? "on" : "", textContent: label(x),
+                             title: "Bấm: chỉ chọn mục này · Ctrl + bấm: chọn thêm / bỏ bớt" });
+    b.onclick = (e) => {
+      if (!(e.ctrlKey || e.metaKey || e.shiftKey) || allOn) { set.clear(); set.add(x); }
+      else if (set.has(x)) { if (set.size > 1) set.delete(x); }
+      else set.add(x);
+      onFilterChange();
+    };
+    return b;
+  }));
+}
+
+// Giống nice_color bên Python: viết hoa đầu từ + mở chữ tắt (HTHR -> Heather, DK -> Dark...)
+const COLOR_ABBR = { hthr: "heather", htr: "heather", mlt: "multi", mult: "multi", dk: "dark", lt: "light", nvy: "navy",
+  blk: "black", wht: "white", gry: "grey", brn: "brown", gol: "gold", lav: "lavender", burg: "burgundy",
+  chrcl: "charcoal", ivry: "ivory", pnk: "pink" };
+const niceColor = (c) => (c || "").replace(/[A-Za-z]+/g, (w) => {
+  const full = COLOR_ABBR[w.toLowerCase()];
+  return full || w === w.toUpperCase() ? (full || w.toLowerCase()).replace(/^\w/, (m) => m.toUpperCase()) : w;
+});
+
+function renderFilters() {
+  const groups = pv.groups || [], colors = pv.colors || [];
+  $("#fltGroupsBox").hidden = groups.length < 2;
+  $("#fltColorsBox").hidden = colors.length < 2;
+  fltChips($("#fltGroups"), groups, flt.groups);
+  fltChips($("#fltColors"), colors, flt.colors, niceColor);
+  // Size của màu + nhóm đang chọn: hiện đủ mọi size trên site, size đang đưa vào eBay sáng lên
+  const oneGroup = groups.length > 1 && flt.groups.size === 1;
+  const nSizes = renderSizeChips(oneGroup);
+  $("#fltBox").hidden = groups.length < 2 && colors.length < 2 && nSizes < 2;   // sản phẩm không có lựa chọn nào
+  // Xem trước tiêu đề
+  let oneColor = flt.colors.size === 1 ? niceColor([...flt.colors][0]) : "";
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (oneColor && new RegExp(`\\b${esc(oneColor)}\\b`, "i").test(pv.title_base)) oneColor = "";   // tên đã có màu (nguyên từ)
+  // giống _apply_filters bên Python: tên đã có nhóm size (vd "Petite Crop Pants") thì không thêm lần nữa
+  let groupTxt = oneGroup ? [...flt.groups][0] : "";
+  if (groupTxt && new RegExp(`\\b${groupTxt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(pv.title_base)) groupTxt = "";
+  const extra = [oneColor, groupTxt].filter(Boolean).join(", ");
+  const full = (pv.title_base + (extra ? ", " + extra : "")).trim();
+  fltFullTitle = full;
+  $("#fltTitle").replaceChildren(el("b", { textContent: pv.title_base }), extra ? ", " : "",
+    el("span", { className: "ext", textContent: extra }),
+    el("span", { className: full.length > 80 ? "over" : "muted small", textContent: ` (${full.length}/80${full.length > 80 ? " — dài quá, bấm ✨ Sửa bằng AI ở bảng" : ""})` }));
+}
+
+// ---------- trang bộ sưu tập: các món khác cùng trang -> chọn rồi thêm vào bảng thành listing riêng
+let piPick = new Set();
+
+function renderPageItems() {
+  const items = pv.page_items || [];
+  $("#piBox").hidden = !items.length;
+  if (!items.length) return;
+  const free = items.filter((p) => !p.in_table);
+  $("#piCount").textContent = items.length;
+  $("#piGrid").replaceChildren(...items.map((p) => {
+    const st = p.in_table ? "Đã có trong bảng" : p.options ? `${p.options} lựa chọn`
+      : p.available ? "Còn hàng" : (p.status || "Hết hàng");
+    const card = el("div", { className: "pi-card" + (piPick.has(p.url) ? " on" : "") + (p.in_table ? " done" : ""),
+                             title: p.in_table ? "Món này đã có trong bảng" : PICK_TIP },
+      el("img", { src: `/api/thumb?u=${encodeURIComponent(p.image)}`, alt: "", loading: "lazy" }),
+      p.in_table ? el("span", { className: "tag", textContent: "✓ trong bảng" }) : "",
+      el("div", { className: "nm", textContent: p.name }),
+      el("div", { className: "muted", textContent: p.code }),
+      el("div", { textContent: p.price ? `$${p.price.toFixed(2)}${p.options ? " (tới)" : ""} → $${(p.ebay_price || 0).toFixed(2)}` : "" }),
+      el("div", { className: p.available === false && !p.in_table ? "q0" : "st-ok", textContent: st }));
+    if (!p.in_table) {
+      card.onclick = (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) { piPick.has(p.url) ? piPick.delete(p.url) : piPick.add(p.url); }
+        else piPick = new Set([p.url]);
+        renderPageItems();
+      };
+    }
+    return card;
+  }));
+  $("#piAll").disabled = !free.length;
+  $("#piAdd").disabled = !piPick.size;
+  $("#piAdd").textContent = piPick.size ? `＋ Thêm ${piPick.size} món vào bảng` : "＋ Thêm vào bảng";
+}
+
+async function addPageItems() {
+  if (!pv || !piPick.size) return;
+  try {
+    const out = await api("/api/append", { id: pv.id, urls: [...piPick], upload: $("#upload").checked });
+    $("#piStatus").textContent = `Đang chạy ${out.count} món — xem tiến độ ở bảng Kết quả`;
+    (pv.page_items || []).forEach((p) => { if (piPick.has(p.url)) p.in_table = true; });   // không cho thêm lại lần nữa
+    piPick = new Set();
+    renderPageItems();
+  } catch (e) { alert(e.message); }
+}
+
+// Nút size: trạng thái lấy thẳng từ các biến thể đang chọn (vsPick). Bấm = chỉ size đó, Ctrl + bấm = thêm / bỏ.
+// Size hết hàng ở mọi màu đang chọn: hiện mờ, không bấm được (vẫn thêm được ở bảng nâng cao nếu cần).
+function renderSizeChips(oneGroup) {
+  const groups = pv.groups || [], colors = pv.colors || [];
+  const pool = (pv.all_variants || []).filter((v) => (!colors.length || flt.colors.has(v.color))
+    && (groups.length < 2 || flt.groups.has(v.group)));
+  const sizeOf = (v) => (oneGroup ? v.base : v.size) || "";
+  const items = [...new Set(pool.map(sizeOf))].filter(Boolean);
+  const box = $("#fltSizes");
+  if (items.length < 2) {
+    const picked = [...new Set((pv.all_variants || []).filter((v) => vsPick.has(v.key)).map(sizeOf))].filter(Boolean);
+    box.className = "small";
+    box.textContent = picked.length ? picked.join(" · ") : (vsPick.size ? "(1 lựa chọn)" : "(không còn size nào còn hàng)");
+    return items.length;
+  }
+  box.className = "chips";
+  const keysOf = (s) => pool.filter((v) => v.available && sizeOf(v) === s).map((v) => v.key);
+  const avail = items.filter((s) => keysOf(s).length);
+  const isOn = (s) => pool.some((v) => sizeOf(v) === s && vsPick.has(v.key));
+  const allOn = avail.length > 0 && avail.every(isOn);
+  const redraw = () => { renderFilters(); renderVariantPicker(); };
+  const all = el("button", { className: "all" + (allOn ? " on" : ""), textContent: "Tất cả" });
+  all.onclick = () => { avail.forEach((s) => keysOf(s).forEach((k) => vsPick.add(k))); redraw(); };
+  box.replaceChildren(all, ...items.map((s) => {
+    const keys = keysOf(s);
+    const b = el("button", { className: isOn(s) && !allOn ? "on" : "", textContent: s, disabled: !keys.length,
+                             title: keys.length ? "Bấm: chỉ chọn size này · Ctrl + bấm: chọn thêm / bỏ bớt" : "Hết hàng" });
+    if (!keys.length) b.style.textDecoration = "line-through";
+    b.onclick = (e) => {
+      if (!(e.ctrlKey || e.metaKey || e.shiftKey) || allOn) {
+        pool.forEach((v) => vsPick.delete(v.key));
+        keys.forEach((k) => vsPick.add(k));
+      } else if (isOn(s)) {
+        if (avail.filter(isOn).length > 1) pool.filter((v) => sizeOf(v) === s).forEach((v) => vsPick.delete(v.key));
+      } else keys.forEach((k) => vsPick.add(k));
+      redraw();
+    };
+    return b;
+  }));
+  return items.length;
+}
+
+function onFilterChange() {
+  // Biến thể = mọi size CÒN HÀNG thuộc màu + nhóm size đang chọn
+  const groups = pv.groups || [], colors = pv.colors || [];
+  vsPick = new Set((pv.all_variants || []).filter((v) => v.available
+    && (!colors.length || flt.colors.has(v.color)) && (groups.length < 2 || flt.groups.has(v.group))).map((v) => v.key));
+  renderFilters();
+  renderVariantPicker();
+}
+
+// ---------- chọn biến thể đưa vào file: đủ mọi biến thể trên site, mỗi dòng 1 ô tích, nhóm theo màu
+let vsPick = new Set();
+const PICK_TIP = "Bấm: chỉ chọn mục này · Ctrl + bấm: chọn thêm / bỏ bớt";
+
+// Bấm thường = chỉ chọn đúng các biến thể này; giữ Ctrl (hoặc Shift) + bấm = chọn thêm / bỏ bớt
+function pickClick(e, keys) {
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    const allOn = keys.every((k) => vsPick.has(k));
+    keys.forEach((k) => (allOn ? vsPick.delete(k) : vsPick.add(k)));
+  } else {
+    vsPick = new Set(keys);
+  }
+  renderFilters();
+  renderVariantPicker();
+}
+
+function renderVariantPicker() {
+  const all = pv.all_variants || [];
+  const byColor = new Map();
+  all.forEach((v) => (byColor.get(v.color) || byColor.set(v.color, []).get(v.color)).push(v));
+  const rows = [];
+  for (const [color, list] of byColor) {
+    if (color && byColor.size > 1) {
+      // Dòng đầu nhóm: tích / bỏ cả màu
+      const on = list.filter((v) => vsPick.has(v.key)).length;
+      const box = el("input", { type: "checkbox", checked: on === list.length });
+      box.indeterminate = on > 0 && on < list.length;
+      const avail = list.filter((v) => v.available).length;
+      const head = el("tr", { className: "vgroup pickable", title: PICK_TIP }, el("td", { className: "sel" }, box),
+        el("td", { colSpan: 6 }, el("b", { textContent: color }), ` · ${list.length} size · còn hàng ${avail}`));
+      head.onclick = (e) => pickClick(e, list.map((v) => v.key));
+      rows.push(head);
+    }
+    for (const v of list) {
+      const box = el("input", { type: "checkbox", checked: vsPick.has(v.key) });
+      const on = vsPick.has(v.key);
+      const tr = el("tr", { className: (on ? "" : "off") + " pickable", title: PICK_TIP });
+      tr.onclick = (e) => pickClick(e, [v.key]);
+      rows.push(tr);
+      tr.append(
+        el("td", { className: "sel" }, box),
+        el("td", { textContent: v.color || "—" }), el("td", { textContent: v.size || "—" }),
+        el("td", { className: v.available ? "st-ok" : "q0", textContent: v.available ? "Còn hàng" : "Hết hàng" }),
+        el("td", { textContent: `$${Number(v.src_price).toFixed(2)}` + (v.src_list ? ` (gốc $${Number(v.src_list).toFixed(2)})` : "") }),
+        el("td", { textContent: on ? `$${v.price}` : "—" }),
+        el("td", { className: on && !v.available ? "q0" : "", textContent: on ? (v.available ? pv.qty : 0) : "—" }));
+    }
+  }
+  $("#pvVariants").replaceChildren(...rows);
+  const n = vsPick.size, oos = all.filter((v) => vsPick.has(v.key) && !v.available).length;
+  $("#pvSelCount").textContent = `— đang chọn ${n}/${all.length} biến thể` + (oos ? ` (${oos} hết hàng → số lượng 0)` : "")
+    + (n > 250 ? " · eBay chỉ nhận 250, phần dư sẽ bị bỏ" : "") + " · bỏ bớt size, thêm size hết hàng…";
+  const changed = selectionChanged();
+  $("#vsSave").classList.toggle("pending", changed);
+  $("#vsSave2").classList.toggle("pending", changed);
+  // Đang đúng lựa chọn đã lưu -> ẩn nút Lưu; đổi biến thể mới hiện
+  $("#vsSave").style.display = changed ? "" : "none";
+  $("#vsSave2").style.display = changed ? "" : "none";
+  $("#vsStatus").textContent = changed ? "Chưa lưu" : "";
+  // Trên khung chọn: luôn cho thấy số biến thể đang chọn (bảng chi tiết thu gọn)
+  $("#vsStatus2").textContent = `Đang chọn ${n}/${all.length} biến thể` + (changed ? " · chưa lưu" : "");
+  updateSaveBtns();
+  renderPreview();   // giá / màu / size bên phải đổi ngay theo lựa chọn
+  ensurePhotos();    // màu mới chọn chưa có ảnh -> tải ảnh màu đó (có tiến trình)
+}
+
+async function saveVariants() {
+  if (!vsPick.size) return alert("Chưa chọn biến thể nào.");
+  if (photoRunning()) return alert("Đang tải ảnh màu mới — chờ tải xong rồi bấm Lưu.");
+  const r = { id: pv.id };
+  $("#vsStatus").textContent = "Đang lưu (màu mới chọn sẽ được up ảnh)…";
+  // Màu / nhóm size đưa vào tiêu đề lấy theo đúng các biến thể đang tích (kể cả tích thêm ở bảng nâng cao)
+  const picked = (pv.all_variants || []).filter((v) => vsPick.has(v.key));
+  const filters = {
+    colors: (pv.colors || []).filter((c) => picked.some((v) => v.color === c)),
+    groups: (pv.groups || []).length > 1 ? pv.groups.filter((g) => picked.some((v) => v.group === g)) : [...flt.groups],
+  };
+  const changes = { variant_sel: [...vsPick], filters };
+  if (edits[r.id] !== undefined) changes.title = edits[r.id];   // tiêu đề đang gõ ở bảng: giữ, không bị dựng lại
+  const specsDraft = pendingSpecs();
+  delete edits[r.id];
+  if (await saveRows([r.id], changes)) {
+    await loadPreview();
+    restoreSpecs(specsDraft);   // ô item specifics đang gõ dở (chưa bấm Lưu) không bị mất
+    $("#vsStatus").textContent = "✓ Đã lưu — file CSV chỉ có các biến thể đã tích";
+  } else {
+    if (changes.title !== undefined) edits[r.id] = changes.title;
+    $("#vsStatus").textContent = "";
+  }
+}
+
+// Ô item specifics đã sửa mà chưa bấm "Lưu item specifics" — giữ lại khi cửa sổ Xem tải lại sau lần lưu khác
+function pendingSpecs() {
+  const out = {};
+  document.querySelectorAll("#pvSpecs input[data-name]:not(:disabled)").forEach((i) => {
+    if (i.value.trim() !== (i.dataset.orig || "")) out[i.dataset.name] = i.value;
+  });
+  return out;
+}
+function restoreSpecs(draft) {
+  document.querySelectorAll("#pvSpecs input[data-name]:not(:disabled)").forEach((i) => {
+    if (i.dataset.name in draft) i.value = draft[i.dataset.name];
+  });
+}
+
+// ---------- item specifics: danh sách của Category trên eBay, sửa tay được (lưu riêng cho dòng này)
+const parseSpecs = (t) => Object.fromEntries((t || "").split("|").filter((x) => x.includes("="))
+  .map((x) => [x.slice(0, x.indexOf("=")).trim(), x.slice(x.indexOf("=") + 1).trim()]).filter(([k, v]) => k && v));
+
+function renderSpecs() {
+  const manual = parseSpecs(pv.manual_specifics);
+  const spec = pv.specifics || {};
+  const axes = (pv.axes || []).filter(Boolean);
+  const rows = [];
+  const seen = new Set();
+  const add = (name, required, values, mode) => {
+    if (seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    const isAxis = axes.includes(name);
+    const inp = el("input", { type: "text", value: isAxis ? "(theo biến thể)" : (spec[name] ?? ""), disabled: isAxis,
+      placeholder: mode === "SELECTION_ONLY" ? "chọn trong danh sách" : "", spellcheck: false });
+    inp.dataset.name = name;
+    inp.dataset.orig = spec[name] ?? "";
+    if (isAxis) inp.classList.add("axis");
+    else if (required && !spec[name]) inp.classList.add("miss");
+    if (values?.length) {
+      const dl = el("datalist", { id: "asp-" + rows.length }, ...values.map((v) => el("option", { value: v })));
+      inp.setAttribute("list", dl.id);
+      rows.push(el("div", {}, el("span", { className: required ? "req" : "", textContent: name }), el("div", {}, inp, dl)));
+    } else {
+      rows.push(el("div", {}, el("span", { className: required ? "req" : "", textContent: name }), inp));
+    }
+  };
+  (pv.aspects || []).filter((a) => a.required).forEach((a) => add(a.name, true, a.values, a.mode));
+  // Có Wi-Fi / Bluetooth: eBay Mỹ bắt FCC ID -> ô đặt lên đầu, tô đỏ khi trống. Không cần nhưng Category có ô này -> vẫn cho điền
+  if (pv.fcc_need || pv.fcc_aspect || "FCC ID" in manual) add("FCC ID", !!pv.fcc_need, null, "");
+  Object.keys(spec).forEach((k) => add(k, false, null, ""));
+  (pv.aspects || []).filter((a) => !a.required).forEach((a) => add(a.name, false, a.values, a.mode));
+  Object.keys(manual).forEach((k) => add(k, false, null, ""));
+  $("#pvSpecs").replaceChildren(...rows);
+  $("#pvSpecHint").textContent = (pv.aspects?.length
+    ? `— Category ${pv.category} · dấu * là bắt buộc${pv.missing?.length ? ` · còn thiếu: ${pv.missing.join(", ")}` : ""}`
+    : "— chưa có danh sách của eBay (điền key eBay API trong Cài đặt để tool tự kiểm tra)")
+    + (pv.fcc_need ? " · có Wi-Fi / Bluetooth: điền FCC ID đúng model (nhãn máy / hộp / sách HD, hoặc tra ở fcc.gov/oet/ea/fccid)" : "");
+  $("#pvSpecStatus").textContent = "";
+}
+
+async function saveSpecs() {
+  const manual = parseSpecs(pv.manual_specifics);
+  const out = {};
+  document.querySelectorAll("#pvSpecs input[data-name]:not(:disabled)").forEach((i) => {
+    const v = i.value.trim();
+    // Lưu ô đã sửa tay hoặc vốn là giá trị gõ tay từ trước
+    if (v && (v !== i.dataset.orig || i.dataset.name in manual)) out[i.dataset.name] = v.replace(/[|=]/g, "/");
+  });
+  const text = Object.entries(out).map(([k, v]) => `${k}=${v}`).join("|");
+  const r = { id: pv.id };
+  // lựa chọn màu / size đang đổi dở (chưa bấm Lưu biến thể) -> giữ lại sau khi cửa sổ Xem tải lại
+  const draft = selectionChanged() ? { pick: new Set(vsPick), colors: new Set(flt.colors), groups: new Set(flt.groups) } : null;
+  if (await saveRows([r.id], { specifics: text })) {
+    await loadPreview();
+    if (draft) {
+      vsPick = draft.pick;
+      flt = { colors: draft.colors, groups: draft.groups };
+      renderFilters();
+      renderVariantPicker();
+    }
+    $("#pvSpecStatus").textContent = pv.missing?.length ? `Còn thiếu: ${pv.missing.join(", ")}` : "✓ Đã lưu — đủ item specifics bắt buộc";
+  }
+}
+function closePreview() { $("#modal").hidden = true; document.body.style.overflow = ""; }
+
+// ---------- chọn màu chưa có ảnh -> tool tải + up ảnh màu đó (chạy nền), hiện tiến trình từng ảnh
+const photo = { st: null, id: "", seq: 0, timer: 0, hideT: 0, tried: new Set() };
+const photoRunning = () => !!pv && photo.st?.state === "running" && photo.st.id === pv.id;
+
+// màu đang chọn mà chưa có ảnh đã up (và chưa thử trong lần mở này)
+function photoWanted() {
+  const have = pv.pics?.colors || {};
+  const chosen = new Set((pv.all_variants || []).filter((v) => vsPick.has(v.key)).map((v) => v.color));
+  return [...chosen].filter((c) => c && !have[c] && (pv.color_srcs?.[c] || []).length && !photo.tried.has(c));
+}
+
+async function ensurePhotos() {
+  if (!pv || photoRunning()) return;
+  const want = photoWanted();
+  if (!want.length) return;
+  want.forEach((c) => photo.tried.add(c));
+  await startPhotos(want);
+}
+
+async function startPhotos(colors) {
+  const id = pv.id;
+  clearTimeout(photo.hideT);
+  try { photoUpdate(await api("/api/photos", { id, colors })); }
+  catch (e) { photo.st = { state: "done", id, colors, items: [{ color: colors[0], src: "", state: "fail", err: e.message }] }; renderPhotos(); }
+}
+
+function photoUpdate(st) {
+  const id = pv.id;
+  photo.st = { ...st, id };
+  if (st.pics) { pv.pics = { ...pv.pics, colors: st.pics.colors }; pv.pics_failed = st.pics.failed; }
+  clearTimeout(photo.timer);
+  if (st.state === "running") {
+    renderPhotos();
+    const seq = ++photo.seq;
+    const tick = async () => {
+      if (seq !== photo.seq || !pv || pv.id !== id) return;   // đã sang dòng khác / có lượt mới
+      try { photoUpdate(await api("/api/photos/status", { id })); } catch { photo.timer = setTimeout(tick, 1000); }
+    };
+    photo.timer = setTimeout(tick, 500);
+    return;
+  }
+  photoDone(st);
+}
+
+function photoDone(st) {
+  const got = (st.colors || []).filter((c) => st.pics?.colors?.[c]?.length);
+  if (got.length === 1 && st.state === "done") { pvColor = got[0]; pvImgIdx = 0; }   // xem luôn ảnh màu vừa tải
+  renderPhotos();
+  renderVariantPicker();   // mở lại nút Lưu, vẽ lại ảnh; có màu khác đang chờ thì tải tiếp
+  if (!st.items.some((it) => it.state !== "ok")) {
+    clearTimeout(photo.hideT);
+    const id = st.id ?? pv.id;
+    photo.hideT = setTimeout(() => { if (photo.st?.state === "done" && photo.st.id === id) { photo.st = null; renderPhotos(); } }, 4000);
+  }
+}
+
+function renderPhotos() {
+  const st = photo.st, box = $("#photoBox");
+  const live = st && pv && st.id === pv.id && st.items.length;
+  box.hidden = !live;
+  $("#pvImg").classList.toggle("loading", photoRunning());
+  updateSaveBtns();
+  if (!live) return;
+  const n = st.items.length, cnt = (s) => st.items.filter((it) => it.state === s).length;
+  const ok = cnt("ok"), fail = cnt("fail"), skip = cnt("skip"), done = ok + fail + skip;
+  const names = [...new Set(st.items.map((it) => niceColor(it.color)))].join(", ");
+  const run = st.state === "running";
+  $("#photoTitle").textContent = run ? `Đang tải ảnh màu ${names}: ${done}/${n} ảnh`
+    : st.state === "cancelled" ? `Đã hủy — mới tải ${ok}/${n} ảnh màu ${names}`
+    : fail ? `Tải xong ảnh màu ${names}: ${ok}/${n} ảnh, ${fail} ảnh lỗi`
+    : `✓ Đã tải xong ${n} ảnh màu ${names}`;
+  const bar = $("#photoBar");
+  bar.style.width = (n ? Math.round((done / n) * 100) : 0) + "%";
+  bar.classList.toggle("warn", !run && (fail > 0 || skip > 0));
+  $("#photoThumbs").replaceChildren(...st.items.map((it) => {
+    const d = el("div", { className: "ph " + it.state, title: it.err || "" },
+      el("img", { src: thumb(it.src), alt: "", loading: "lazy" }));
+    if (it.state === "ok" || it.state === "fail") d.append(el("b", { textContent: it.state === "ok" ? "✓" : "✗" }));
+    return d;
+  }));
+  $("#photoCancel").hidden = !run;
+  const redo = fail + skip;
+  $("#photoRetry").hidden = run || !redo;
+  $("#photoRetry").textContent = `↻ ${skip && !fail ? "Tải tiếp" : "Thử lại"} ${redo} ảnh ${skip && !fail ? "chưa tải" : "lỗi"}`;
+}
+
+function updateSaveBtns() {
+  const busy = photoRunning();
+  [$("#vsSave"), $("#vsSave2")].forEach((b) => { b.disabled = busy; b.textContent = busy ? "Đang tải ảnh…" : "Lưu biến thể"; });
+}
+
+// ảnh listing chính theo ĐÚNG các màu đang tích (giống cách tool ghép khi xuất CSV)
+function liveMain() {
+  const cp = pv.pics?.colors || {}, general = pv.pics?.general || [];
+  if (!selectionChanged()) return pv.pics?.main || [];
+  const colors = [...new Set((pv.all_variants || []).filter((v) => vsPick.has(v.key)).map((v) => v.color))].filter((c) => cp[c]?.length);
+  if (!colors.length && !general.length) return pv.pics?.main || [];
+  const limit = Math.max(1, Math.min(24, Number(cfg?.max_images) || 12));
+  const main = [...(colors.length ? cp[colors[0]] : []), ...colors.map((c) => cp[c][0]), ...general];
+  return [...new Set(main.filter(Boolean))].slice(0, limit);
+}
+
+// Đang đổi lựa chọn mà chưa bấm Lưu: phần xem trước (giá, màu, size) tính ngay theo lựa chọn mới.
+// Đã lưu / chưa đổi -> null (dùng đúng các dòng CSV server tính).
+let fltFullTitle = "";
+// Khác với bản đã lưu: biến thể đã chọn, hoặc màu / nhóm size trên khung lọc (đổi tiêu đề dù biến thể không đổi)
+function selectionChanged() {
+  const same = (set, arr) => set.size === (arr || []).length && (arr || []).every((x) => set.has(x));
+  return (pv.all_variants || []).some((v) => v.selected !== vsPick.has(v.key))
+    || ((pv.colors || []).length > 1 && !same(flt.colors, pv.filters?.colors))
+    || ((pv.groups || []).length > 1 && !same(flt.groups, pv.filters?.groups));
+}
+function liveVariants() {
+  const all = pv.all_variants || [];
+  if (!selectionChanged()) return null;
+  const groups = pv.groups || [];
+  const oneGroup = groups.length > 1 && flt.groups.size === 1;
+  const saved = pv.variants || [];
+  const oneColor = new Set(saved.map((v) => v.color)).size === 1 ? saved[0]?.color : "";   // màu ghi ở specifics
+  return all.filter((v) => vsPick.has(v.key)).map((v) => ({
+    color: v.color || oneColor || "", size: (oneGroup ? v.base : v.size) || "", price: v.price,
+    src_price: v.src_price, src_list: v.src_list, qty: v.available ? pv.qty : 0, sku: "" }));
+}
+
+function renderPreview() {
+  const list = okResults();
+  const at = list.findIndex((r) => r.id === pv.id);
+  if (at >= 0) pvIndex = at;
+  $("#pvPos").textContent = `${pv.sku} · ${pvIndex + 1}/${list.length}`;
+  $("#pvPrev").disabled = pvIndex === 0;
+  $("#pvNext").disabled = pvIndex === list.length - 1;
+  $("#pvTitle").textContent = pv.title;
+  $("#pvBrand").textContent = pv.specifics?.Brand || "Unbranded";
+  $("#pvCond").textContent = pv.condition || "New";
+  $("#pvCondNote").hidden = !pv.condition_note;
+  $("#pvCondNote").textContent = pv.condition_note || "";
+  $("#pvErr").hidden = !pv.error;
+  $("#pvErr").textContent = pv.error ? "✗ Listing này chưa xuất được: " + pv.error : "";
+  const live = liveVariants();
+  const vs = live || pv.variants || [];
+  $("#pvLive").hidden = !live;
+  if (live && fltFullTitle) $("#pvTitle").textContent = fltFullTitle;
+  const colors = [...new Set(vs.map((v) => v.color).filter(Boolean))];
+  if (pvColor && !colors.includes(pvColor)) pvColor = null;
+  if (pvSize && !vs.some((v) => v.size === pvSize)) pvSize = null;
+  const sizes = [...new Set(vs.map((v) => v.size).filter(Boolean))];
+  const match = vs.filter((v) => (!pvColor || v.color === pvColor) && (!pvSize || v.size === pvSize));
+  const prices = match.map((v) => Number(v.price)).filter((x) => x);
+  $("#pvPrice").textContent = !prices.length ? "—" : Math.min(...prices) === Math.max(...prices)
+    ? `US $${prices[0].toFixed(2)}` : `US $${Math.min(...prices).toFixed(2)} – $${Math.max(...prices).toFixed(2)}`;
+  const srcs = match.map((v) => v.src_price).filter((x) => x);
+  const lists = match.map((v) => v.src_list).filter((x) => x);
+  $("#pvSrcPrice").textContent = srcs.length ? `Giá site: $${Math.min(...srcs).toFixed(2)}${Math.max(...srcs) !== Math.min(...srcs) ? "–$" + Math.max(...srcs).toFixed(2) : ""}`
+    + (lists.length ? ` (giá gốc $${Math.max(...lists).toFixed(2)})` : "") + ` × ${pv.percent}%` : "";
+  const avail = (c, s) => vs.some((v) => (!c || v.color === c) && (!s || v.size === s) && Number(v.qty) > 0);
+  $("#pvColorBox").hidden = !colors.length;
+  $("#pvColor").textContent = pvColor || `${colors.length} màu`;
+  $("#pvColors").replaceChildren(...colors.map((c) => {
+    const b = el("button", { textContent: c, className: (c === pvColor ? "on " : "") + (avail(c, pvSize) ? "" : "na") });
+    b.onclick = () => { pvColor = pvColor === c ? null : c; pvImgIdx = 0; renderPreview(); };
+    return b;
+  }));
+  $("#pvSizeBox").hidden = !sizes.length;
+  $("#pvSizes").replaceChildren(...sizes.map((s) => {
+    const b = el("button", { textContent: s, className: (s === pvSize ? "on " : "") + (avail(pvColor, s) ? "" : "na") });
+    b.onclick = () => { pvSize = pvSize === s ? null : s; renderPreview(); };
+    return b;
+  }));
+  $("#pvPers").hidden = !pv.personalized;
+  $("#pvPersText").textContent = (pv.personalize_fields || []).join(" · ");
+  const one = match.length === 1 ? match[0] : null;
+  const meta = [
+    ["SKU", one ? one.sku : pv.sku], ["Profile", pv.profile || "(không có)"], ["Action Country", pv.country || "US"],
+    ["Category", pv.category || "(chưa có)"], ["Department", pv.department || "—"],
+    ["Danh mục site", (pv.breadcrumbs || []).join(" › ") || "—"],
+  ];
+  $("#pvMeta").replaceChildren(...meta.flatMap(([k, v]) => [el("span", { textContent: k }), el("b", { textContent: v })]),
+    el("span", { textContent: "Link gốc" }), el("a", { href: pv.url, target: "_blank", textContent: pv.url }));
+  // Ảnh: chọn màu thì hiện ảnh của màu đó, không thì ảnh listing chính
+  const pics = (pvColor && pv.pics.colors?.[pvColor]) || liveMain();
+  if (pvImgIdx >= pics.length) pvImgIdx = 0;
+  $("#pvImg").src = pics[pvImgIdx] || "";
+  $("#pvThumbs").replaceChildren(...pics.map((u, i) => {
+    const b = el("button", { className: i === pvImgIdx ? "on" : "" }, el("img", { src: thumb(u), loading: "lazy" }));
+    b.onclick = () => { pvImgIdx = i; renderPreview(); };
+    return b;
+  }));
+  $("#pvDesc").innerHTML = pv.description || "";   // mô tả do tool tạo (đã escape từng đoạn bên Python)
+}
+
+// ---------- Theo dõi sản phẩm: danh sách đã list (tracking.json), kiểm tra giá / tồn kho chạy song song với chạy link
+let tkShown = [], tkResumeInfo = null, tkAliases = {}, tkItems = [], tkAlert = 2, tkFlt = "", tkOpen = new Set(), tkSel = new Set(), tkMtime = -1, tkLogSince = 0, tkTimer = null, tkWasRunning = false;
+const TK_LBL = { up: ["err", "tăng giá"], down: ["ok", "giảm giá"], oos: ["warn", "hết hàng → SL 0"], back: ["", "có hàng lại"] };
+const money = (x) => (x == null || x === "" ? "—" : `$${Number(x).toFixed(2)}`);
+const tkLink = (u) => { const a = el("a", { href: u, target: "_blank", className: "tk-link", textContent: "🔗 " + u.replace(/^https?:\/\/(www\.)?/, "") }); a.onclick = (e) => e.stopPropagation(); return a; };
+const siteName = (k) => SITES.find((s) => s.key === k)?.name || k;
+
+function showTrack(on) {
+  $("#siteView").hidden = on;
+  $("#trackView").hidden = !on;
+  $("#trackTab").classList.toggle("on", on);
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", !on && b.dataset.tab === tab));
+  clearTimeout(tkTimer);
+  if (on) { tkMtime = -1; tkPoll(); }
+}
+async function tkPoll() {
+  clearTimeout(tkTimer);
+  if ($("#trackView").hidden) return;
+  try {
+    const st = await api(`/api/track/state?since=${tkLogSince}`);
+    if (st.mtime !== tkMtime) {
+      tkMtime = st.mtime;
+      const d = await api("/api/track/items");
+      tkItems = d.items; tkAlert = d.alert; tkAliases = d.aliases || {};
+      renderTrack();
+    }
+    tkLogSince = st.log_total;
+    if (st.logs.length) $("#tkLog").append(...st.logs.map((l) => el("div", { className: l.tag, textContent: `${l.t}  ${l.text}` })));
+    const [n, total] = st.progress;
+    $("#tkBar").style.width = total ? `${(n / total) * 100}%` : "0";
+    $("#tkCheck").hidden = st.running;
+    tkResumeInfo = st.resume;
+    $("#tkResume").hidden = st.running || !st.resume;
+    if (st.resume) $("#tkResume").textContent = `▶ Chạy tiếp (${st.resume.done}/${st.resume.total})`;
+    $("#tkStop").hidden = !st.running;
+    $("#tkProg").textContent = st.running ? `Đang kiểm tra ${n}/${total} listing… ${st.current ? "· " + st.current.replace(/^https?:\/\/(www\.)?/, "").slice(0, 70) : ""}`
+      : st.resume ? `Lượt kiểm tra bắt đầu ${st.resume.started.replace(/^(\d{4})-(\d\d)-(\d\d)/, "$3/$2")} đang dừng ở ${st.resume.done}/${st.resume.total} — bấm "Chạy tiếp"`
+      : tkWasRunning ? `Đã kiểm tra xong ${n}/${total} listing` : "";
+    if (st.running) $("#tkLogBox").open = true;
+    tkWasRunning = st.running || tkWasRunning;
+    tkTimer = setTimeout(tkPoll, st.running ? 1200 : 4000);
+  } catch (e) { tkTimer = setTimeout(tkPoll, 5000); }
+}
+function tkStates(it) {
+  const vars = it.check?.vars || {};
+  return it.variants.map((v) => vars[v.vsku]?.state || null);
+}
+function renderTrack() {
+  const rows = tkItems.map((it) => ({ ...it, st: tkStates(it) }));
+  const cnt = (k) => rows.reduce((n, l) => n + l.st.filter((x) => x === k).length, 0);
+  const errN = rows.filter((l) => l.check?.error).length, notChecked = rows.filter((l) => !l.check).length;
+  const kpi = (cls, ico, val, lbl) => el("div", { className: "kpi " + cls }, el("div", { className: "k-ico", textContent: ico }),
+    el("div", { style: "min-width:0" }, el("div", { className: "k-val", textContent: val }), el("div", { className: "k-lbl", textContent: lbl })));
+  $("#tkKpis").replaceChildren(kpi("all", "▤", rows.length, "listing đang theo dõi"), kpi("err", "↑", cnt("up"), `size tăng giá > $${tkAlert}`),
+    kpi("ok", "↓", cnt("down"), `size giảm giá > $${tkAlert}`), kpi("warn", "∅", cnt("oos"), "size hết hàng"), kpi("acc", "↺", cnt("back"), "size có hàng lại"));
+  const live = rows.filter((l) => l.status === "live").length;
+  $("#tkCount").textContent = `· ${rows.length} listing · ${rows.reduce((n, l) => n + l.variants.length, 0)} biến thể · ${live} đã xác nhận lên eBay`;
+  const fill = (id, vals, lbl) => {
+    const s = $(id), cur = s.value;
+    s.replaceChildren(el("option", { value: "", textContent: s.dataset.all }), ...vals.map((v) => el("option", { value: v, textContent: lbl(v) })));
+    s.value = vals.includes(cur) ? cur : "";
+  };
+  fill("#tkProfile", [...new Set(rows.map((l) => l.profile || ""))].sort(), (v) => v || "(không Profile)");
+  fill("#tkSite", [...new Set(rows.map((l) => l.site))].sort(), siteName);
+  const flts = [["", `Tất cả (${rows.length})`], ["up", `Tăng giá (${cnt("up")})`], ["oos", `Hết hàng (${cnt("oos")})`], ["down", `Giảm giá (${cnt("down")})`],
+    ["back", `Có hàng lại (${cnt("back")})`], ["err", `Không đọc được (${errN})`], ["new", `Chưa kiểm tra (${notChecked})`], ["unconf", `Chưa xác nhận lên eBay (${rows.length - live})`]];
+  $("#tkFlt").replaceChildren(...flts.map(([k, t]) => {
+    const c = el("span", { className: "chip " + (TK_LBL[k]?.[0] || (k === "err" ? "err" : "")) + (tkFlt === k ? " on" : ""), textContent: t });
+    c.onclick = () => { tkFlt = k; renderTrack(); };
+    return c;
+  }));
+  const prof = $("#tkProfile").value, site = $("#tkSite").value, q = $("#tkSearch").value.trim().toLowerCase();
+  const show = rows.filter((l) => (!prof || (l.profile || "") === prof) && (!site || l.site === site)
+    && (!q || `${l.sku} ${l.title} ${l.url}`.toLowerCase().includes(q))
+    && (!tkFlt || (tkFlt === "err" ? l.check?.error : tkFlt === "new" ? !l.check : tkFlt === "unconf" ? l.status !== "live" : l.st.includes(tkFlt))))
+    .sort((a, b) => (b.added || "").localeCompare(a.added || ""));
+  tkShown = show.map((l) => l.sku);   // nút Kiểm tra chạy đúng thứ tự này (từ trên xuống), theo bộ lọc đang chọn
+  $("#tkCheck").textContent = `🔍 Kiểm tra giá & tồn kho${show.length < rows.length ? ` (${show.length} dòng đang lọc)` : ""}`;
+  const out = [];
+  show.forEach((l) => {
+    const tags = Object.keys(TK_LBL).map((k) => [k, l.st.filter((x) => x === k).length]).filter(([, n]) => n)
+      .map(([k, n]) => el("span", { className: "chip " + TK_LBL[k][0], textContent: `${n} size ${TK_LBL[k][1]}` }));
+    const eb = [...new Set(l.variants.map((v) => v.ebay))], sp = l.variants.map((v) => v.site_price).filter((x) => x != null);
+    const gl = l.variants.map((v) => v.site_list).filter((x) => x != null);
+    const box = el("input", { type: "checkbox", checked: tkSel.has(l.sku) });
+    box.onclick = (e) => { e.stopPropagation(); box.checked ? tkSel.add(l.sku) : tkSel.delete(l.sku); tkSelInfo(); };
+    const tr = el("tr", { className: "lst" + (tkOpen.has(l.sku) ? " open" : "") },
+      el("td", {}, box), el("td", {}, el("span", { className: "chev", textContent: "›" })),
+      el("td", {}, el("div", { className: "sku", textContent: l.sku }), el("div", { className: "sub", textContent: `${siteName(l.site)} · ${l.title || ""}` }), tkLink(l.url)),
+      el("td", {}, el("div", { textContent: l.profile || "—" }),
+        el("div", { className: "sub", textContent: l.status === "live" ? `✓ đã lên eBay${l.item_id ? " · " + l.item_id : ""}` : "chưa xác nhận" })),
+      el("td", { textContent: (l.added || "—").replace(/^(\d{4})-(\d\d)-(\d\d)/, "$3/$2/$1") }),
+      el("td", {}, el("div", { textContent: !sp.length ? "không rõ" : Math.min(...sp) === Math.max(...sp) ? money(sp[0]) : `${money(Math.min(...sp))}–${money(Math.max(...sp))}` }),
+        gl.length ? el("div", { className: "sub", textContent: `gốc ${money(Math.max(...gl))}` }) : ""),
+      el("td", { textContent: !eb.length ? "—" : eb.length === 1 ? money(eb[0]) : `${money(Math.min(...eb))}–${money(Math.max(...eb))}` }),
+      el("td", {}, l.check?.error ? el("span", { className: "chip err", textContent: "✗ " + l.check.error.slice(0, 90) })
+        : !l.check ? el("span", { className: "muted", textContent: "chưa kiểm tra" })
+        : tags.length ? el("span", { className: "chips-sum" }, ...tags) : el("span", { className: "st-ok", textContent: "✓ không đổi" })),
+      el("td", { className: "sub", textContent: l.check ? l.check.time.replace(/^(\d{4})-(\d\d)-(\d\d)/, "$3/$2") : "—" }));
+    tr.onclick = () => { tkOpen.has(l.sku) ? tkOpen.delete(l.sku) : tkOpen.add(l.sku); renderTrack(); };
+    out.push(tr);
+    if (!tkOpen.has(l.sku)) return;
+    if (!l.variants.length) out.push(el("tr", { className: "var" }, el("td"), el("td"), el("td", { colSpan: 7, className: "sub",
+      textContent: "Không còn dữ liệu lúc list — lần kiểm tra đầu tiên sẽ lấy các size còn hàng làm mốc." })));
+    l.variants.forEach((v, i) => {
+      const r = l.check?.vars?.[v.vsku], st = r?.state;
+      const what = [v.color, v.size].filter(Boolean).join(" · ") || v.rd.replace(/\|/g, " · ") || "1 biến thể";
+      out.push(el("tr", { className: "var" }, el("td"), el("td"),
+        el("td", {}, el("span", { className: "sku", textContent: v.vsku }), el("span", { className: "sub", textContent: `  · ${what}` })),
+        el("td", { className: "sub", textContent: `SL eBay ${v.qty}` }),
+        el("td", { className: "sub", textContent: v.baseline ? "mốc kiểm tra đầu" : "" }),
+        el("td", { className: "sub nw" }, v.site_price == null ? "không rõ" : money(v.site_price),
+          v.site_list ? el("div", { textContent: `gốc ${money(v.site_list)}` }) : ""),
+        el("td", { textContent: money(v.ebay) }),
+        el("td", { className: "nw" }, !r ? el("span", { className: "muted", textContent: l.check ? "—" : "chưa kiểm tra" })
+          : !r.available ? el("span", { className: "chip " + (st === "oos" ? "warn" : ""), textContent: r.gone ? "không còn trên site" + (st === "oos" ? " → SL 0" : "") : st === "oos" ? "hết hàng → SL 0" : "vẫn hết hàng (SL 0)" })
+          : el("span", {}, `site ${money(r.now)}${r.list ? ` (gốc ${money(r.list)})` : ""} → eBay ${money(r.want)} `,
+              el("b", { className: st === "up" ? "d-up" : st === "down" ? "d-down" : "", textContent: `${r.diff >= 0 ? "+" : "−"}$${Math.abs(r.diff).toFixed(2)}` }),
+              st === "up" ? el("span", { className: "d-up", textContent: "  ⚠ đang bán lỗ" }) : st === "back" ? el("span", { className: "chip", textContent: "có hàng lại" }) : "")),
+        el("td")));
+    });
+  });
+  $("#tkRows").replaceChildren(...(out.length ? out : [el("tr", {}, el("td", { colSpan: 9, className: "empty",
+    textContent: rows.length ? "Không có listing nào khớp bộ lọc" : "Chưa có sản phẩm nào — bấm \"Nạp file list cũ\", hoặc chạy link rồi xuất CSV ở tab site" }))]));
+  const oos = cnt("oos"), noId = rows.filter((l) => l.st.includes("oos") && !l.item_id).length;
+  $("#tkReviseInfo").textContent = oos ? `${oos} size hết hàng sẽ đưa số lượng về 0` + (noId ? ` · ${noId} listing chưa có Item ID sẽ bị bỏ (nạp file kết quả upload eBay trước)` : "")
+    : "không có size nào cần đưa về 0";
+  tkSelInfo();
+  renderAliases();
+}
+function renderAliases() {
+  const box = $("#tkAlias");
+  const a = el("input", { type: "text", placeholder: "EBTR", spellcheck: false }), b = el("input", { type: "text", placeholder: "TR", spellcheck: false });
+  const add = el("button", { className: "mini", textContent: "Gộp" });
+  add.onclick = async () => {
+    try { await api("/api/track/alias-add", { name: a.value, to: b.value }); tkMtime = -1; tkPoll(); } catch (e) { alert(e.message); }
+  };
+  box.replaceChildren(el("span", { textContent: "Gộp Profile (cùng 1 acc):" }),
+    ...Object.entries(tkAliases).map(([k, v]) => {
+      const x = el("b", { textContent: "✕", title: "Bỏ gộp (các dòng đã đổi giữ nguyên)" });
+      x.onclick = async () => { await api("/api/track/alias-remove", { name: k }); tkMtime = -1; tkPoll(); };
+      return el("span", { className: "chip" }, `${k} = ${v}`, x);
+    }), a, el("span", { textContent: "=" }), b, add);
+}
+function tkSelInfo() {
+  [...tkSel].forEach((k) => { if (!tkItems.some((i) => i.sku === k)) tkSel.delete(k); });
+  $("#tkSelBox").hidden = !tkSel.size;
+  $("#tkSelN").textContent = tkSel.size;
+}
+async function tkFiles(input, path) {
+  const files = [...input.files];
+  input.value = "";
+  if (!files.length) return;
+  try {
+    const data = await Promise.all(files.map((f) => new Promise((ok, bad) => {
+      const fr = new FileReader();
+      fr.onload = () => ok({ name: f.name, data: fr.result });
+      fr.onerror = () => bad(new Error("Không đọc được " + f.name));
+      fr.readAsDataURL(f);
+    })));
+    const r = await api(path, { files: data });
+    alert(path.endsWith("list")
+      ? `Đã nạp ${files.length} file: thêm ${r.added} listing, cập nhật ${r.updated}`
+        + (r.waiting ? `\n${r.waiting} listing chờ lần kiểm tra đầu để tìm dữ liệu lúc list` : "")
+        + (r.no_link ? `\n${r.no_link} listing chưa có link gốc (file CSV không có link, máy cũng không còn lưu) — nạp thêm file list có link` : "")
+        + (r.bad.length ? `\n\nBỏ qua ${r.bad.length} dòng:\n• ` + r.bad.slice(0, 15).join("\n• ") : "")
+      : `Đã đọc file kết quả eBay: ${r.live} listing đã lên eBay, gỡ ${r.removed} listing báo lỗi` + (r.qty_updated ? `, cập nhật số lượng ${r.qty_updated} biến thể` : "")
+        + (r.unknown ? `\n${r.unknown} SKU không có trong danh sách theo dõi` : ""));
+    tkMtime = -1; tkPoll();
+  } catch (e) { alert(e.message); }
+}
+async function tkRun(skus, resume = false) {
+  if (!resume && tkResumeInfo && !(await uiConfirm(`Đang có lượt kiểm tra dở (${tkResumeInfo.done}/${tkResumeInfo.total}). Bỏ lượt đó và kiểm tra lại từ đầu?\n\n(Bấm Huỷ rồi bấm "Chạy tiếp" để chạy nốt)`, "Kiểm tra lại từ đầu"))) return;
+  try { await api("/api/track/check", { skus, resume }); $("#tkLog").replaceChildren(); tkLogSince = 0; tkWasRunning = true; tkPoll(); }
+  catch (e) { alert(e.message); }
+}
+
+// ---------- khởi động
+(async () => {
+  [cfg, SITES] = await Promise.all([api("/api/config"), api("/api/sites")]);
+  let saved = "";
+  try { saved = localStorage.getItem("retail_tab") || ""; } catch {}
+  // Link mở thẳng: #<site> hoặc #<site>/xem (mở luôn cửa sổ Xem của dòng đầu tiên)
+  const [hashTab, hashAct, hashCode] = decodeURIComponent(location.hash.slice(1)).split("/");
+  if (hashTab) saved = hashTab;
+  tab = SITES.some((s) => s.key === saved) ? saved : SITES[0]?.key || "";
+  renderTabs();
+  renderSettings();
+  applyTabUI();
+  api("/api/license").then((l) => {
+    if (!l.text) return;
+    $("#licText").textContent = l.text;
+    $("#licText").className = l.level || "";
+    $("#tgLink").textContent = l.telegram;
+    $("#tgLink").href = "https://t.me/" + l.telegram.replace(/^@/, "");
+    $("#licSupport").hidden = false;
+  }).catch(() => {});
+  $("#links").addEventListener("input", countLinks);
+  $("#save").onclick = async () => {
+    const b = $("#save");
+    b.disabled = true; b.textContent = "Đang lưu…"; $("#saved").textContent = "";
+    try { await saveSettings(); }
+    catch (e) { $("#saved").style.color = "var(--err)"; $("#saved").textContent = "✗ Chưa lưu được: " + e.message; }
+    finally { b.disabled = false; b.textContent = "Lưu cài đặt"; }
+  };
+  // sửa tiếp thì xoá dòng "Đã lưu" cũ (khỏi hiểu nhầm là đã lưu bản mới)
+  $("#settingsModal").addEventListener("input", () => { if ($("#saved").textContent.startsWith("✓")) $("#saved").textContent = ""; });
+  $("#addRule").onclick = () => $("#ruleTable tbody").append(ruleRow({}));
+  $("#run").onclick = run;
+  $("#trackTab").onclick = () => showTrack(true);
+  $("#tkCheck").onclick = () => tkRun(tkShown);
+  $("#tkResume").onclick = () => tkRun(null, true);
+  $("#tkCheckSel").onclick = () => tkRun([...tkSel]);
+  $("#tkStop").onclick = () => api("/api/track/stop", {});
+  $("#tkSetProf").onclick = async () => {
+    const to = $("#tkProfNew").value.trim();
+    if (!to) return alert("Gõ tên Profile mới, vd TR");
+    const olds = [...new Set(tkItems.filter((i) => tkSel.has(i.sku)).map((i) => i.profile || ""))].filter((x) => x && x !== to);
+    const remember = olds.length ? await uiConfirm(`Đổi ${tkSel.size} dòng sang Profile ${to}.\n\nGhi nhớ luôn ${olds.join(", ")} = ${to} để lần xuất / nạp file sau tự gộp?`, "Ghi nhớ", "Chỉ đổi lần này") : false;
+    try { await api("/api/track/profile", { skus: [...tkSel], profile: to, remember }); $("#tkProfNew").value = ""; tkMtime = -1; tkPoll(); }
+    catch (e) { alert(e.message); }
+  };
+  $("#tkRemove").onclick = async () => {
+    if (!(await uiConfirm(`Bỏ ${tkSel.size} listing khỏi danh sách theo dõi? (không đụng gì trên eBay)`, "Bỏ theo dõi"))) return;
+    try { await api("/api/track/remove", { skus: [...tkSel] }); tkSel.clear(); tkMtime = -1; tkPoll(); } catch (e) { alert(e.message); }
+  };
+  ["#tkProfile", "#tkSite"].forEach((s) => ($(s).onchange = renderTrack));
+  $("#tkSearch").addEventListener("input", renderTrack);
+  $("#tkListFile").onchange = (e) => tkFiles(e.target, "/api/track/import-list");
+  $("#tkResultFile").onchange = (e) => tkFiles(e.target, "/api/track/import-result");
+  $("#tkRevise").onclick = async () => {
+    try {
+      const r = await api("/api/track/revise", {});
+      alert(r.files.length ? `Đã xuất ${r.files.length} file Revise (${r.variants} size → số lượng 0) vào\n${r.folder}\n\n• ` + r.files.join("\n• ")
+        + (r.no_id.length ? `\n\n${r.no_id.length} listing chưa có Item ID nên chưa có trong file (nạp file kết quả upload eBay rồi xuất lại).` : "")
+        : r.no_id.length ? `${r.no_id.length} listing có size hết hàng nhưng chưa có Item ID — nạp file kết quả upload eBay trước.` : "Không có size nào cần đưa về 0.");
+      tkMtime = -1; tkPoll();
+    } catch (e) { alert(e.message); }
+  };
+  $("#stop").onclick = () => api("/api/stop", {});
+  $("#resumeBtn").onclick = async () => {
+    try {
+      await saveSettings(true);
+      await api("/api/retry", { upload: $("#upload").checked, only: "pending" });
+      $("#logCard").open = true;
+      lastSig = "";
+      poll();
+    } catch (e) { alert(e.message); }
+  };
+  $("#retryBtn").onclick = async () => {
+    try {
+      await saveSettings(true);
+      await api("/api/retry", { upload: $("#upload").checked, only: "failed" });
+      $("#logCard").open = true;
+      lastSig = "";
+      poll();
+    } catch (e) { alert(e.message); }
+  };
+  $("#openDir").onclick = () => api("/api/open-output", {});
+  $("#upload").onchange = async () => {   // lưu ngay (form Cài đặt được làm mới mỗi 5 giây sẽ không bật/tắt lại)
+    try { cfg = await api("/api/config", { upload_images: $("#upload").checked }); } catch (e) { alert(e.message); }
+  };
+  $("#useProxy").onchange = async () => {
+    // Nút ở đầu trang chỉ đổi proxy của site đang mở
+    const on = $("#useProxy").checked;
+    try { cfg = await api("/api/config", { sites: { [tab]: { use_proxy: on } } }); syncProxyInfo(); renderTabs(); }
+    catch (e) { alert(e.message); }
+  };
+  // % giá của site đang mở: sửa ở đầu trang -> lưu vào ô "% giá" của site đó, bảng Kết quả tính lại giá
+  $("#sitePct").onchange = async () => {
+    const v = Number($("#sitePct").value);
+    if (!(v >= 50 && v <= 500)) { alert("% giá nên trong khoảng 50–500 (vd 130 = giá site × 1.3)"); return renderPageSub(); }
+    try {
+      // Chỉ lưu % của site đang mở (không đụng các cài đặt khác)
+      cfg = await api("/api/config", { sites: { [tab]: { price_percent: String(v) } } });
+      renderPageSub();
+      lastSig = "";
+      poll();
+    } catch (e) { alert(e.message); }
+  };
+  $("#sitePct").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#sitePct").blur(); });
+  $("#reexport").onclick = async () => {
+    const ids = [...selected];   // có tích dòng -> chỉ xuất các dòng đó
+    exportingN = ids.length || okResults().length;
+    exporting = true;
+    updateExportState();
+    try {
+      await saveSettings(true);
+      // hộp chọn thư mục có thể mở lâu: mày có thể đổi tab trong lúc đó; xuất riêng thì chỉ gửi tiêu đề sửa của dòng đã tích
+      const sentTab = tab, sent = ids.length ? Object.fromEntries(Object.entries(edits).filter(([k]) => ids.includes(k))) : { ...edits };
+      const r = await api("/api/export", { titles: sent, ids });
+      if (!r.cancelled) {
+        const target = tab === sentTab ? edits : (tabState[sentTab]?.edits || {});
+        Object.keys(sent).forEach((k) => { if (target[k] === sent[k]) delete target[k]; });   // chỉ bỏ tiêu đề đã xuất
+        await poll();
+        if (ids.length || r.errors?.length || r.notes?.length) showExportResult(r, exportingN, ids.length);
+      }
+    } catch (e) { alert(e.message); }
+    exporting = false;
+    updateExportState();
+  };
+  $("#selAll").onchange = (e) => { okResults().filter(rowShown).forEach((r) => (e.target.checked ? selected.add(r.id) : selected.delete(r.id))); syncSelection(); };
+  $("#bulkApply").onclick = applyBulk;
+  $("#importFile").addEventListener("change", (e) => importFile(e.target.files[0]));
+  $("#makeTemplate").onclick = async () => {
+    try {
+      const r = await api("/api/template", {});
+      if (!r.opened_in_app) alert(`Đã tạo file mẫu: ${r.path}\n\nMáy chưa có Excel nên tool mở thư mục chứa file.`);
+    } catch (e) { alert("Không tạo được file mẫu: " + e.message); }
+  };
+  $("#importClear").onclick = () => { imported = null; renderImport(); renderTabs(); };
+  $("#importAll").onchange = (e) => importAll(e.target.files[0]);
+  document.querySelectorAll("input[name=host]").forEach((r) => r.addEventListener("change", syncHost));
+  // gõ key ImgBB / thông tin R2 -> dòng "Up ảnh lên …" ở đầu trang đổi theo (khỏi chờ bấm Lưu)
+  ["imgbb_api_key", ...R2_TEXT, "r2_secret_access_key"].forEach((k) => $("#" + k).addEventListener("input", () => { $("#hostName").textContent = hostChain(); }));
+  $("#testHost").onclick = testHost;
+  $("#testProxy").onclick = testProxy;
+  $("#testEbay").onclick = testEbay;
+  $("#testAi").onclick = testAi;
+  $("#pxAdd").onclick = () => $("#pxPaste").value.trim() ? proxyAction("add", $("#pxPaste").value) : alert("Dán proxy vào ô trước đã.");
+  $("#pxReplace").onclick = () => $("#pxPaste").value.trim() ? proxyAction("replace", $("#pxPaste").value) : alert("Dán proxy vào ô trước đã.");
+  $("#pxClear").onclick = () => proxyAction("clear", "");
+  $("#ai_prompt").addEventListener("input", syncPromptState);
+  $("#aiPromptReset").onclick = () => { $("#ai_prompt").value = cfg.ai_prompt_default || ""; syncPromptState(); };
+  $("#aiBtn").onclick = () => aiTitles(false);
+  $("#aiRestore").onclick = () => aiTitles(true);
+  $("#pvClose").onclick = closePreview;
+  $("#pvSpecSave").onclick = saveSpecs;
+  $("#vsSave").onclick = saveVariants;
+  $("#vsSave2").onclick = saveVariants;
+  $("#piAll").onclick = () => { piPick = new Set((pv.page_items || []).filter((p) => !p.in_table).map((p) => p.url)); renderPageItems(); };
+  $("#piAdd").onclick = addPageItems;
+  // các nút chọn nhanh ở bảng nâng cao: vẽ lại cả khung "Chọn giống trang gốc" cho khớp
+  $("#photoCancel").onclick = async () => { try { photoUpdate(await api("/api/photos/cancel", { id: pv.id })); } catch (e) { alert(e.message); } };
+  $("#photoRetry").onclick = () => {
+    const bad = [...new Set(photo.st.items.filter((it) => it.state === "fail" || it.state === "skip").map((it) => it.color))];
+    bad.forEach((c) => photo.tried.add(c));
+    startPhotos(bad);
+  };
+  $("#vsAll").onclick =() => { (pv.all_variants || []).forEach((v) => vsPick.add(v.key)); renderFilters(); renderVariantPicker(); };
+  $("#vsAvail").onclick = () => { vsPick = new Set((pv.all_variants || []).filter((v) => v.available).map((v) => v.key)); renderFilters(); renderVariantPicker(); };
+  $("#vsNone").onclick = () => { vsPick.clear(); renderFilters(); renderVariantPicker(); };
+  $("#pvPrev").onclick = () => pvMove(-1);
+  $("#pvNext").onclick = () => pvMove(1);
+  // Bấm ra nền tối mới đóng — kéo bôi đen chữ rồi thả chuột ra ngoài nền không tính (không mất phần đang sửa)
+  let downOn = null;
+  document.addEventListener("mousedown", (e) => { downOn = e.target; }, true);
+  $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal" && downOn === e.target) closePreview(); });
+  $("#openSettings").onclick = () => openSettings();
+  $("#settingsClose").onclick = closeSettings;
+  $("#settingsCancel").onclick = closeSettings;
+  $("#settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal" && downOn === e.target) closeSettings(); });
+  $("#setContent").addEventListener("scroll", syncSetNav);
+  document.querySelectorAll("#setNav a").forEach((a) => (a.onclick = (e) => {
+    e.preventDefault();
+    scrollToSection(a.getAttribute("href").slice(1));
+  }));
+  document.addEventListener("keydown", (e) => {
+    if (!$("#settingsModal").hidden) { if (e.key === "Escape") closeSettings(); return; }
+    if ($("#modal").hidden) return;
+    if (e.key === "Escape") closePreview();
+    if (e.target.closest?.("input, textarea, select")) return;   // đang gõ trong ô: mũi tên để di chuyển con trỏ
+    if (e.key === "ArrowLeft" && pvIndex > 0) $("#pvPrev").click();
+    if (e.key === "ArrowRight" && pvIndex < okResults().length - 1) $("#pvNext").click();
+  });
+  await poll();
+  setInterval(poll, 1000);
+  setInterval(refreshCfg, 5000);
+  if (hashAct === "xem" && okResults().length) {
+    // #site/xem/<mã sản phẩm> mở đúng sản phẩm đó; không có mã thì mở dòng cuối
+    const hit = hashCode && okResults().find((r) => (r.code || "").toUpperCase() === hashCode.toUpperCase());
+    await openPreview((hit || okResults()[okResults().length - 1]).id);
+  }
+})();
+</script>
+</body>
+</html>
