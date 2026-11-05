@@ -192,20 +192,32 @@ def attr(prod, attr_id):
 
 
 def sfra_variants(f, host, site, master, first, color_id="color", size_id="size",
-                  images_fn=None, reuse_first=False):
+                  images_fn=None, reuse_first=False, fixed_attributes=None, size_values=None):
     """Đi qua từng màu (và thuộc tính phụ nếu có) của sản phẩm SFRA, trả về (colors, variants, size_name).
 
     first      : product JSON của master (đã tải) — lấy danh sách màu/thuộc tính.
     images_fn  : hàm(product JSON đã chọn màu) -> list URL ảnh lớn.
     reuse_first: True = dùng lại `first` cho màu đang được chọn sẵn trong nó (đỡ 1 request).
     Thuộc tính phụ (vd độ dài, petite) được gộp vào nhãn size: "M Petite".
+    fixed_attributes: chỉ đọc các giá trị phụ đã chốt; giữ nhãn nguồn trong _site_size cho tracking.
+    size_values: các mã size được phép đọc, None = giữ tất cả.
     """
     ca = attr(first, color_id)
     sa = attr(first, size_id)
     extras = [a for a in first.get("variationAttributes") or []
               if (a.get("attributeId") or a.get("id")) not in (color_id, size_id) and a.get("values")]
     color_vals = [v for v in (ca or {}).get("values") or [] if v.get("value") or v.get("id")] or [None]
-    extra_combos = list(itertools.product(*[a["values"] for a in extras])) or [()]
+    fixed_attributes = fixed_attributes or {}
+    extra_values = []
+    for a in extras:
+        aid = a.get("attributeId") or a.get("id")
+        values = a["values"]
+        if aid in fixed_attributes:
+            values = [v for v in values if str(v.get("value") or v.get("id")) == str(fixed_attributes[aid])]
+            if not values:
+                raise SkipProduct(f"Không có lựa chọn {aid}={fixed_attributes[aid]}")
+        extra_values.append(values)
+    extra_combos = list(itertools.product(*extra_values)) or [()]
 
     colors, variants = [], []
     for cv in color_vals:
@@ -234,24 +246,40 @@ def sfra_variants(f, host, site, master, first, color_id="color", size_id="size"
                 imgs = images_fn(p)
             price, lst = usd_price(p.get("price"))
             psa = attr(p, size_id) or sa
-            suffix = " ".join(str(ev.get("displayValue") or ev.get("value") or "") for ev in combo).strip()
+            source_suffix = " ".join(str(ev.get("displayValue") or ev.get("value") or "") for ev in combo).strip()
+            suffix = " ".join(str(ev.get("displayValue") or ev.get("value") or "")
+                              for a, ev in zip(extras, combo)
+                              if (a.get("attributeId") or a.get("id")) not in fixed_attributes).strip()
             svals = (psa or {}).get("values") or [None]
+            if size_values is not None:
+                svals = [v for v in svals if v is not None and str(v.get("value") or v.get("id")) in size_values]
             for sv in svals:
                 sp, sl = price, lst
                 if sv is not None and (p.get("price") or {}).get("type") == "range":
                     # giá khác nhau theo size -> hỏi riêng size này
-                    q = get_variation(f, host, site, master, {**sel, size_id: sv.get("value") or sv.get("id")})
+                    try:
+                        q = get_variation(f, host, site, master, {**sel, size_id: sv.get("value") or sv.get("id")})
+                    except SkipProduct as e:   # 1 size tải lỗi -> bỏ size đó (không đoán giá), không bỏ cả sản phẩm
+                        if "Đã dừng" in str(e):
+                            raise
+                        f.log(f"  ⚠ không đọc được giá size {sv.get('displayValue') or sv.get('value')} "
+                              f"màu {cname or ''}: {e} — bỏ size này", "warn")
+                        continue
                     sp, sl = usd_price(q.get("price"))
                 label = (str(sv.get("displayValue") or sv.get("value") or "") if sv else "")
+                source_label = (label + " " + source_suffix).strip() if source_suffix else label
                 label = (label + " " + suffix).strip() if suffix else label
                 avail = bool(p.get("available", True))
                 if sv is not None:
                     avail = bool(sv.get("selectable")) and not sv.get("isBIS") and sv.get("available", True) is not False
-                variants.append({
+                variant = {
                     "color": cname, "size": label, "price": sp, "list_price": sl, "available": avail,
                     "id": "-".join(x for x in [master, cid or "", (sv.get("value") or sv.get("id")) if sv else ""]
                                    + [str(ev.get("value") or ev.get("id")) for ev in combo] if x),
-                })
+                }
+                if source_label != label:
+                    variant["_site_size"] = source_label
+                variants.append(variant)
         colors.append({"name": cname, "images": imgs})
     size_name = (sa or {}).get("displayName") or ("Size" if sa else "")
     size_name = size_name[:1].upper() + size_name[1:] if size_name else ""

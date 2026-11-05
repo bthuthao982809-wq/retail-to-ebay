@@ -3,7 +3,7 @@ import importlib
 
 ORDER = ["theory", "bananarepublic", "touchofclass", "janieandjack", "eileenfisher",
          "azazie", "sohohome", "talbots", "personalcreations", "tommybahama", "prana", "sonos", "hollister",
-         "fanatics", "bestbuy"]
+         "fanatics", "bestbuy", "hernest"]
 
 
 def load_all():

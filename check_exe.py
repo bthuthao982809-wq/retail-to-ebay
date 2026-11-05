@@ -35,6 +35,10 @@ if missing:
 cfg = json.loads(read("config.default.json") or b"{}")
 leaked = [k for k in ("ebay_client_id", "ebay_client_secret", "gemini_api_key", "proxies_enc", "proxy_file",
                       "r2_access_key_id", "r2_secret_access_key", "imgbb_api_key") if cfg.get(k)]
+# Không chỉ kiểm proxy chung: từng site có thể có danh sách mã hoá / file riêng.
+for site, settings in (cfg.get("sites") or {}).items():
+    if isinstance(settings, dict):
+        leaked.extend(f"sites.{site}.{key}" for key in ("proxies_enc", "proxy_file") if settings.get(key))
 if not cfg:
     problems.append("khong co config.default.json")
 if leaked:

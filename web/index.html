@@ -499,6 +499,10 @@
   .bulk { border-radius: 12px; background: #fbfcfe; padding: 8px 12px; border-color: var(--border); }
   .bulk input { border-radius: 8px; }
   .bulk button { border-radius: 8px; }
+  .brand-tools { position: relative; margin-left: auto; }
+  .brand-tools summary { cursor: pointer; font-size: 11px; color: var(--muted); padding: 5px 8px; list-style: none; border: 1px solid var(--border); border-radius: 6px; }
+  .brand-tools > div { position: absolute; right: 0; top: 100%; z-index: 20; background: white; padding: 5px; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px #0002; min-width: 155px; }
+  .brand-tools button { display: block; width: 100%; text-align: left; border: 0; font-size: 12px; }
   #aiBtn { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
 
   /* ---- bảng kết quả */
@@ -725,6 +729,10 @@
         <span class="sep"></span>
         <button id="aiBtn" title="Sửa tiêu đề các dòng đã chọn; không chọn thì chỉ sửa tiêu đề đang cảnh báo">✨ Sửa tiêu đề AI</button>
         <button id="aiRestore" title="Bỏ tiêu đề AI đã viết, quay lại tiêu đề trước khi dùng AI — cho dòng đã tích (không tích = tất cả)">↺ Tiêu đề trước khi dùng AI</button>
+        <details class="brand-tools" id="titleBrandMenu"><summary title="Thêm/bỏ tên hãng cho dòng đã chọn; không chọn = toàn bộ danh sách">Hãng ▾</summary><div>
+          <button id="titleBrandAdd">+ Thêm hãng ở đầu</button>
+          <button id="titleBrandRemove">− Bỏ hãng ở đầu</button>
+        </div></details>
       </div>
       <div class="table-wrap">
         <table class="results">
@@ -1526,6 +1534,24 @@ async function aiTitles(restore) {
     poll();
   } catch (e) { alert(e.message); }
 }
+async function applyTitleBrand(action) {
+  $("#titleBrandMenu").open = false;
+  syncSelection();
+  const tabAtStart = tab;
+  const ids = selected.size ? [...selected] : okResults().map((r) => r.id);
+  if (!ids.length) return alert("Chưa có dòng thành công để sửa tên hãng.");
+  const verb = action === "add" ? "Thêm" : "Bỏ";
+  if (!(await uiConfirm(`${verb} tên hãng ở đầu tiêu đề cho ${ids.length} dòng${selected.size ? " đã chọn" : " trong danh sách"}?\n\nTiêu đề vượt 80 ký tự sẽ được cảnh báo để sửa bằng AI.`, verb + " hãng"))) return;
+  if (tab !== tabAtStart) return;
+  const titles = Object.fromEntries(ids.filter((id) => edits[id] !== undefined).map((id) => [id, edits[id]]));
+  try {
+    const result = await api("/api/title-brand", { action, ids, titles });
+    result.ids.forEach((id) => delete edits[id]);
+    lastSig = "";
+    await poll();
+    alert(`Đã đổi ${result.changed} tiêu đề.${result.skipped ? ` Bỏ qua ${result.skipped} dòng không có hãng/tên phù hợp.` : ""}${result.over ? `\n⚠ ${result.over} tiêu đề vượt 80 ký tự — bấm Sửa tiêu đề AI để sửa.` : ""}`);
+  } catch (e) { alert(e.message); }
+}
 // ---------- proxy: chỉ hiện ip:port, user/pass không bao giờ gửi ra giao diện
 function renderProxies() {
   const list = cfg.proxy_list || [];
@@ -2259,6 +2285,7 @@ async function poll() {
   $("#retryBtn").textContent = `↻ Chạy lại ${nErr} dòng lỗi`;
   $("#retryBtn").disabled = !!s.busy_other || s.ai_running;
   $("#aiBtn").disabled = s.running || s.ai_running;
+  $("#titleBrandAdd").disabled = $("#titleBrandRemove").disabled = s.running || s.ai_running;
   $("#aiBtn").dataset.busy = String(!!s.ai_running);
   updateAiTitleButton();
   updateExportState();
@@ -3051,9 +3078,10 @@ async function tkRun(skus, resume = false) {
   $("#tkRevise").onclick = async () => {
     try {
       const r = await api("/api/track/revise", {});
-      alert(r.files.length ? `Đã xuất ${r.files.length} file Revise (${r.variants} size → số lượng 0) vào\n${r.folder}\n\n• ` + r.files.join("\n• ")
+      const noRd = (r.no_rd || []).length ? `\n\n${r.no_rd.length} listing có size hết hàng nhưng tool không còn file CSV lúc list (không biết đúng biến thể trên eBay) — chưa ghi vào file, sửa số lượng trên eBay hoặc nạp file CSV đã xuất của listing đó: ${r.no_rd.slice(0, 8).join(", ")}${r.no_rd.length > 8 ? " ..." : ""}` : "";
+      alert((r.files.length ? `Đã xuất ${r.files.length} file Revise (${r.variants} size → số lượng 0) vào\n${r.folder}\n\n• ` + r.files.join("\n• ")
         + (r.no_id.length ? `\n\n${r.no_id.length} listing chưa có Item ID nên chưa có trong file (nạp file kết quả upload eBay rồi xuất lại).` : "")
-        : r.no_id.length ? `${r.no_id.length} listing có size hết hàng nhưng chưa có Item ID — nạp file kết quả upload eBay trước.` : "Không có size nào cần đưa về 0.");
+        : r.no_id.length ? `${r.no_id.length} listing có size hết hàng nhưng chưa có Item ID — nạp file kết quả upload eBay trước.` : noRd ? "Chưa ghi được file Revise nào." : "Không có size nào cần đưa về 0.") + noRd);
       tkMtime = -1; tkPoll();
     } catch (e) { alert(e.message); }
   };
@@ -3150,6 +3178,8 @@ async function tkRun(skus, resume = false) {
   $("#aiPromptReset").onclick = () => { $("#ai_prompt").value = cfg.ai_prompt_default || ""; syncPromptState(); };
   $("#aiBtn").onclick = () => aiTitles(false);
   $("#aiRestore").onclick = () => aiTitles(true);
+  $("#titleBrandAdd").onclick = () => applyTitleBrand("add");
+  $("#titleBrandRemove").onclick = () => applyTitleBrand("remove");
   $("#pvClose").onclick = closePreview;
   $("#pvSpecSave").onclick = saveSpecs;
   $("#vsSave").onclick = saveVariants;

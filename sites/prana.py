@@ -21,6 +21,7 @@ HOST = "www.prana.com"
 SITE = "Sites-Prana_US-Site"
 BRANDS = ("prAna", "Prana", "PRANA")
 DEPT = {"women": "Women", "womens": "Women", "men": "Men", "mens": "Men"}
+PANTS = re.compile(r"\b(?:pants?|trousers?|jeans?|leggings?|joggers?)\b", re.I)
 
 
 def product_code(url):
@@ -83,7 +84,41 @@ def _variants(f, master, first):
     return colors, variants, (sa.get("displayName") or "Size")
 
 
-def scrape(f, url):
+def _listing_options(first):
+    """Quần: chỉ REG nếu site dùng tên, hoặc 31 inch; size số quần nữ chỉ 2–16.
+
+    Size chữ và size theo vòng eo không đổi. Không có REG/31 thì không tự đoán chiều dài.
+    """
+    text = " ".join(str(first.get(k) or "") for k in
+                    ("productName", "tileName", "variantName", "primaryCategoryID", "parentCategoryID"))
+    if not PANTS.search(text):
+        return {}, None, ""
+    fixed, inseam = {}, ""
+    dimensions = (attr(first, "dimension") or {}).get("values") or []
+    chosen = next((v for v in dimensions if any(str(v.get(k) or "").lower() in ("rg", "reg", "regular")
+                                               for k in ("value", "id", "displayValue"))), None)
+    if chosen is None:
+        chosen = next((v for v in dimensions if str(v.get("value") or v.get("id")) == "31"), None)
+    if chosen is not None:
+        value = str(chosen.get("value") or chosen.get("id"))
+        fixed["dimension"] = value
+        if value == "31":
+            inseam = "31 in"
+        else:
+            attrs = _attrs(first)
+            for text in attrs.get("inseamLength", []) + attrs.get("features", []):
+                m = re.search(r'\b(?:RG|REG|REGULAR)\b[\s:=–-]*(\d+(?:\.\d+)?)\s*(?:["″]|in\b|inch)', text, re.I)
+                if m:
+                    inseam = f"{float(m.group(1)):g} in"
+                    break
+    sizes = [str(v.get("value") or v.get("id")) for v in (attr(first, "size") or {}).get("values") or []]
+    allowed = None
+    if sizes and all(s.isdigit() for s in sizes) and any(int(s) <= 16 for s in sizes):
+        allowed = {s for s in sizes if 2 <= int(s) <= 16}
+    return fixed, allowed, inseam
+
+
+def scrape(f, url, apply_listing_rules=True):
     code = product_code(url)
     if not code:
         raise SkipProduct("Không đọc được mã sản phẩm từ link")
@@ -94,12 +129,19 @@ def scrape(f, url):
     if first.get("online") is False:
         raise SkipProduct("Sản phẩm không còn bán")
 
+    fixed, allowed_sizes, inseam = _listing_options(first) if apply_listing_rules else ({}, None, "")
     res = _variants(f, master, first)
     if res:
         colors, variants, size_name = res
         common = []
     else:
-        colors, variants, size_name, common = sfra_variants(f, HOST, SITE, master, first, images_fn=_images)
+        colors, variants, size_name, common = sfra_variants(
+            f, HOST, SITE, master, first, images_fn=_images,
+            fixed_attributes=fixed, size_values=allowed_sizes)
+    if allowed_sizes is not None:
+        variants = [v for v in variants if (v["size"].split() or [""])[0] in allowed_sizes]
+    if not variants and (fixed or allowed_sizes is not None):
+        raise SkipProduct("Không có biến thể phù hợp quy tắc prAna: chiều dài REG/31, size số 2–16")
 
     a = _attrs(first)
     details = {}
@@ -112,6 +154,12 @@ def scrape(f, url):
     features = [x.strip() for v in a.get("features") or [] for x in v.split("|") if x.strip()]
     bullets = make_bullets([first.get("productPitch") or "; ".join(a.get("productPitch") or []),
                             first.get("longDescription")] + features, BRANDS)
+    if fixed:
+        bullets = [b for b in bullets if not re.match(r"(?i)^inseams?\s*:", b)]
+        if inseam:
+            details["Inseam"] = inseam
+        else:
+            details["Length"] = "Regular"
 
     # primaryCategoryID: "women-tops-sweaters-and-hoodies" hoặc "the-zion-family-collection-women"
     cat_id = (first.get("primaryCategoryID") or first.get("parentCategoryID") or "").lower()
@@ -135,4 +183,11 @@ def scrape(f, url):
     }
     if url_color:
         prod["url_color"] = titlecase(url_color)
+    if inseam:
+        prod["fixed_inseam"] = inseam
     return validate(prod)
+
+
+def scrape_for_tracking(f, url):
+    """Đọc đủ chiều dài/size nguồn để kiểm tra đúng cả các listing đã xuất trước quy tắc mới."""
+    return scrape(f, url, apply_listing_rules=False)

@@ -25,6 +25,13 @@ class SiteBrandTitleTests(unittest.TestCase):
         cfg = {"brand_in_title": False, "sites": {"eileenfisher": {"brand_in_title": True}}}
         self.assertEqual(core.title_brand(prod(), cfg), "")
 
+    def test_disabled_also_removes_brand_left_in_source_name(self):
+        product = dict(prod(), title="Eileen Fisher Organic Linen Box-Top")
+        cfg = {"brand_in_title": True, "sites": {"eileenfisher": {"brand_in_title": False}}}
+        self.assertEqual(core.make_title(product, cfg), "Women's Organic Linen Box-Top")
+        cfg["sites"]["eileenfisher"]["brand_in_title"] = True
+        self.assertEqual(core.make_title(product, cfg), "Eileen Fisher Women's Organic Linen Box-Top")
+
     def test_update_config_saves_site_switch_and_keeps_other_fields(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(core, "CONFIG_PATH", Path(tmp) / "config.json"):
             cfg = core.update_config({"sites": {"eileenfisher": {"brand_in_title": False}}})

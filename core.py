@@ -58,6 +58,7 @@ SITE_DEFAULTS = {
     "hollister":         {"prefix": "HOL-", "use_proxy": False},
     "fanatics":          {"prefix": "FAN-", "use_proxy": False},   # IP Việt Nam bị chặn -> tự chuyển proxy
     "bestbuy":           {"prefix": "BBY-", "use_proxy": False, "delay": "0"},   # mở từng trang bằng Camoufox
+    "hernest":           {"prefix": "HER-", "use_proxy": False, "delay": "2"},
 }
 
 # Quy tắc chọn Category theo từ khoá (tìm trong breadcrumb + tên sản phẩm, quy tắc trên cùng khớp trước).
@@ -553,7 +554,7 @@ def rehost_image(src_url, cfg, cache, proxies=None, referer=None):
     new_url = upload_to_host(data, cfg)
     keep_image_bytes(new_url, data)
     with _CACHE_LOCK:   # 2 luồng up ảnh cùng lúc: đọc lại file rồi thêm, không ghi đè mục của luồng kia
-        cache[key] = {"url": new_url, "info": info}
+        cache[key] = {"url": new_url, "info": info, "src": src_url}
         disk = load_json(CACHE_PATH, {})
         disk.update({k: v for k, v in cache.items() if k not in disk})
         disk[key] = cache[key]
@@ -672,11 +673,12 @@ def keep_image_bytes(url, data):
         pass
 
 
-def purge_image_tmp():
+def purge_image_tmp(keep_urls=()):
     cutoff = time.time() - IMG_TMP_DAYS * 86400
+    keep = {_tmp_file(u).name for u in keep_urls}
     try:
         for f in IMG_TMP.glob("*.jpg"):
-            if f.stat().st_mtime < cutoff:
+            if f.name not in keep and f.stat().st_mtime < cutoff:
                 f.unlink()
     except Exception:
         pass
@@ -724,6 +726,30 @@ def host_key_of(url, cfg):
     return "r2" if pub and url.startswith(pub) else None
 
 
+def download_recovery_image(src, cfg, site, referer=None):
+    """Khôi phục ảnh bằng đúng proxy của site, có đổi đường tải khi IP bị chặn."""
+    from sites import load_all
+    from sites.base import proxy_url
+
+    mod = load_all().get(site)
+    protected = bool(getattr(mod, "NEEDS_PROXY", False) or site_cfg(cfg, site).get("use_proxy"))
+    routes = []
+    for p in proxies_for(cfg, site):
+        address = proxy_url(p)
+        routes.append({"http": address, "https": address})
+    # Site yêu cầu proxy: thử proxy trước. Site khác: IP gốc trước, sau đó proxy.
+    routes = routes + [None] if protected else [None] + routes
+    last = None
+    for route in routes:
+        try:
+            return download_image(src, route, referer)
+        except Exception as e:
+            # Không ghi địa chỉ/mật khẩu proxy từ thông báo thư viện mạng.
+            code = re.search(r"HTTP\s+\d{3}", str(e))
+            last = code.group(0) if code else type(e).__name__
+    raise RuntimeError(f"Không tải được ảnh gốc qua IP/proxy đã cấu hình: {last}")
+
+
 def fix_bad_pics(items, cfg, workers=8, log=None, step=None):
     """Kiểm tra mọi link ảnh của các listing sắp xuất; ảnh lỗi thì up lại sang nơi khác (bỏ nơi vừa lỗi) và đổi link
     trong listing + cache ảnh. Ảnh kiểm tốt được nhớ PIC_CHECK_DAYS ngày (pic_check.json): xuất lại cùng listing khỏi
@@ -731,7 +757,17 @@ def fix_bad_pics(items, cfg, workers=8, log=None, step=None):
     Trả về danh sách ghi chú (rỗng nếu ảnh đều tốt)."""
     from concurrent.futures import ThreadPoolExecutor
 
-    purge_image_tmp()
+    # Cache cũ chứa URL nguồn trong key; cache mới lưu rõ src. Không đoán theo vị
+    # trí khi danh sách màu/số ảnh đã đổi sau lần chạy trước.
+    cached_sources = {}
+    with _CACHE_LOCK:
+        image_cache = load_json(CACHE_PATH, {}) or {}
+    for key, value in image_cache.items():
+        if not isinstance(value, dict) or not value.get("url"):
+            continue
+        source = value.get("src") or re.split(r"\|sq\d+\|", key, maxsplit=1)[0]
+        if isinstance(source, str) and source.startswith(("https://", "http://")) and (value.get("src") or source != key):
+            cached_sources[value["url"]] = source
     slots = {}   # link -> {"where": [(danh sách, vị trí, listing)], "src": ảnh gốc, "ref": trang sản phẩm}
     for it in items:
         if it.get("_dup"):
@@ -746,11 +782,14 @@ def fix_bad_pics(items, cfg, workers=8, log=None, step=None):
         for lst, srcs in groups:
             same = len(lst) == len(srcs)
             for i, u in enumerate(lst):
-                e = slots.setdefault(u, {"where": [], "src": "", "ref": ""})
+                e = slots.setdefault(u, {"where": [], "src": "", "ref": "", "site": ""})
                 e["where"].append((lst, i, it))
-                if same and not e["src"]:
-                    e["src"], e["ref"] = srcs[i], (it.get("product") or {}).get("url", "")
+                source = cached_sources.get(u) or (srcs[i] if same else "")
+                if source and not e["src"]:
+                    prod = it.get("product") or {}
+                    e["src"], e["ref"], e["site"] = source, prod.get("url", ""), prod.get("site", "")
     urls = [u for u in slots if u.startswith("http")]
+    purge_image_tmp(keep_urls=urls)
     if not urls:
         return []
     checks = load_pic_checks()
@@ -789,20 +828,25 @@ def fix_bad_pics(items, cfg, workers=8, log=None, step=None):
             if f.exists():
                 data = f.read_bytes()
             elif e["src"]:
-                data, _ = process_image(download_image(e["src"], None, e["ref"]), cfg, square=cfg.get("square_image", True))
+                data, _ = process_image(download_recovery_image(e["src"], cfg, e["site"], e["ref"]), cfg,
+                                        square=cfg.get("square_image", True))
             if not data:
                 raise RuntimeError("không còn bản ảnh để up lại")
             order = [h for h in upload_hosts(cfg) if h != hk] or upload_hosts(cfg)
             new = upload_to_host(data, cfg, order)
         except Exception as ex_:
-            failed.append(f"{u} ({str(ex_)[:80]})")
+            failed.append(f"{u} ({str(ex_)[:160]})")
             continue
         for lst, i, it in e["where"]:
             lst[i] = new
             if it.get("pic") == u:
                 it["pic"] = new
         keep_image_bytes(new, data)
+        checks.pop(u, None)
+        checks[new] = time.time()
         moved[u] = new
+        if log:
+            log(f"  Đã up lại ảnh lỗi {k}/{len(bad)} sang {HOST_NAMES.get(host_key_of(new, cfg), 'host khác')}")
     if moved:
         with _CACHE_LOCK:
             disk = load_json(CACHE_PATH, {})
@@ -812,7 +856,7 @@ def fix_bad_pics(items, cfg, workers=8, log=None, step=None):
             save_json(CACHE_PATH, disk)
         notes.append(f"Danh sách ảnh lỗi: {len(moved)} ảnh host trả lỗi, đã up lại sang nơi khác")
     if failed:
-        notes.append(f"Danh sách ảnh lỗi chưa sửa được ({len(failed)}), eBay sẽ không tải được ảnh: " + "; ".join(failed[:5]))
+        notes.append(f"Danh sách ảnh lỗi chưa sửa được ({len(failed)}), tool chưa xác minh được ảnh để eBay tải: " + "; ".join(failed[:5]))
     save_pic_checks(checks)
     return notes
 
@@ -1715,26 +1759,29 @@ DEPT_WORD = {"women": "Women's", "men": "Men's", "girls": "Girls'", "boys": "Boy
              "baby girls": "Baby Girls'", "baby boys": "Baby Boys'"}
 
 
-def title_brand(prod, cfg):
+def title_brand(prod, cfg, enabled=None):
     """Tên hãng đặt ở đầu tiêu đề (Cài đặt "Tên hãng ở đầu tiêu đề"); ô Brand của listing vẫn là Unbranded.
     Tắt ở ô chung = mọi site không gắn; tắt ở nút đầu tab site = riêng site đó không gắn."""
-    if not cfg.get("brand_in_title", True):
+    if enabled is False:
         return ""
-    if prod.get("site") and site_cfg(cfg, prod["site"]).get("brand_in_title", True) is False:
+    if enabled is None and (not cfg.get("brand_in_title", True) or
+                           (prod.get("site") and site_cfg(cfg, prod["site"]).get("brand_in_title", True) is False)):
         return ""
     # Fanatics ghi hãng hàng in theo đơn là "Fanatics MTO Label" -> tiêu đề chỉ "Fanatics" (cả dòng đã chạy từ trước)
     return re.sub(r"(?i)\s+MTO Label$", "", (prod.get("brand") or "").strip())
 
 
-def make_title(prod, cfg, max_len=80):
+def make_title(prod, cfg, max_len=80, brand_enabled=None):
     """Tiêu đề theo site: "[Hãng] + Women's/Men's/Girls'... + tên sản phẩm" (dài quá thì app nhờ AI viết lại)."""
     dept = DEPT_WORD.get((prod.get("department") or "").lower(), "")
-    brand = title_brand(prod, cfg)
+    brand = title_brand(prod, cfg, brand_enabled)
     name = prod["title"]
     if prod.get("site") == "fanatics":   # Fanatics: tên site đã ghi sẵn Women's / Youth / Unisex khi cần -> không tự thêm Men's / Women's
         dept = ""
-    if brand:   # bộ cào sót tên hãng trong tên -> bỏ để không lặp "Hãng Women's Hãng Coat" (kể cả hãng "'47")
-        name = re.sub(rf"(?i)(?<!\w){re.escape(brand)}(?!\w)[’']?s?\s*", "", name).strip(" :-–")   # "Easy Playhouse: Tent"
+    # Bỏ hãng còn sót trong tên gốc cả khi tắt công tắc; chỉ gắn lại ở đầu nếu bật.
+    own_brand = (prod.get("brand") or "").strip()
+    if own_brand:
+        name = re.sub(rf"(?i)(?<!\w){re.escape(own_brand)}(?!\w)[’']?s?\s*", "", name).strip(" :-–")
     if dept:    # tên site đã có "Womens" / "Mens" (không dấu nháy) -> coi như đã có Department
         name = re.sub(rf"(?i)^{re.escape(dept.replace(chr(39), ''))}\b\s*", "", name)
     t = f"{dept} {name}"
@@ -2025,6 +2072,8 @@ def build_specifics(item, cfg, category, extra, aspects, has_color, has_size):
     st = GROUP_SIZE_TYPE.get(group.lower(), "Regular") if group else size_type(sizes, prod.get("department"))
     if prod.get("department") and has_size and name("Size Type") and allowed("Size Type", st):
         spec[name("Size Type")] = allowed("Size Type", st)
+    if prod.get("fixed_inseam") and name("Inseam") and allowed("Inseam", prod["fixed_inseam"]):
+        spec[name("Inseam")] = allowed("Inseam", prod["fixed_inseam"])
     spec.update({k: clean_value(v) for k, v in extra.items()})
     # specifics gõ tay: không được trùng trục biến thể (Color / Size / Inseam đang làm biến thể) và không đổi Brand
     ins_axis = inseam_axis(prod, aspects) if has_size else None
@@ -2160,7 +2209,7 @@ def listing_rows(item, cfg):
         parent["*StartPrice"] = f"{ebay_price(base_price(v, prod['site']), percent, rnd):.2f}"
         parent["*Quantity"] = qty
         parent["_src"] = (v["price"], v.get("list_price"))   # giá site (cửa sổ Xem đọc; không ghi ra CSV)
-        parent["_vkey"] = vkey(v)   # biến thể site của dòng này (Theo dõi sản phẩm đọc; không ghi ra CSV)
+        parent["_vkey"] = vkey(dict(v, size=v.get("_site_size", v["size"])))  # giữ nhãn nguồn cho Theo dõi
         if v["color"]:
             parent[spec_col(color_axis)] = clean_value(v["color"])
         # chỉ 1 cỡ "One Size" mà Category không có ô Size (tool đặt tên "Option") -> không ghi ô size thừa
@@ -2191,7 +2240,9 @@ def listing_rows(item, cfg):
                                   (f"{size_axis}={s}" if has_size else ""),
                                   (f"{ins_axis}={i}" if i else "")) if x)
         # SKU biến thể phải khác nhau: 2 màu chung 6 chữ đầu ("Bluff Blue" / "Bluff Blue Stripe") -> dùng số thứ tự
-        sku = variant_sku(item["sku"], v["color"], v["size"], n)
+        # prAna chốt chiều dài: SKU vẫn dùng nhãn nguồn để nhập CSV trên máy khác còn dò được tồn kho.
+        sku_size = v.get("_site_size", v["size"]) if prod["site"] == "prana" else v["size"]
+        sku = variant_sku(item["sku"], v["color"], sku_size, n)
         if sku in skus:
             sku = f"{item['sku'][:SKU_MAX - 5]}-V{n:03d}"
         skus.add(sku)

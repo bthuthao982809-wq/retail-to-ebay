@@ -252,7 +252,8 @@ class Fetcher:
                     if attempt >= 2:
                         break   # không có proxy: thử thêm chỉ làm site chặn lâu hơn
                 if self.proxy_on and self.pool.proxies:
-                    self.pool.rotate()
+                    # bị chặn: tránh cả dải mạng của proxy đó một lúc (site thường chặn nguyên dải)
+                    self.pool.rotate(blocked=isinstance(e, Blocked))
                     self.log(f"  ⚠ {type(e).__name__}: {e} — đổi sang proxy {self.pool.label()}", "warn")
                 else:
                     self.log(f"  ⚠ {type(e).__name__}: {e} — thử lại", "warn")

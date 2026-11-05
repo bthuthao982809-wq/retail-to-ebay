@@ -447,6 +447,43 @@ class Engine:
             res["title_base"], res["title_extra"] = text, ""
         res["title"] = text
 
+    def title_brand_rows(self, tab, ids, add, titles=None):
+        """Chỉ thêm/bỏ tiền tố hãng trên tiêu đề hiện tại, giữ phần AI và đuôi màu/size."""
+        s = self.session(tab)
+        cfg = core.load_config()
+        titles = titles or {}
+        changed = skipped = over = 0
+        applied = []
+        with self.lock:
+            if s.running or s.ai_running:
+                raise RuntimeError("Tab đang chạy — chờ xong rồi sửa tên hãng")
+            rows = [r for r in s.results if r.get("status") == "ok" and (not ids or r["id"] in ids)]
+            if not rows:
+                raise RuntimeError("Chưa có dòng thành công để sửa tên hãng")
+            for row in rows:
+                brand = core.title_brand(row.get("product") or {}, cfg, True)
+                if not brand:
+                    skipped += 1
+                    continue
+                text = str(titles.get(row["id"], row.get("title") or "")).strip()
+                # Chỉ bỏ tiền tố, không đụng tên model / chữ hãng nằm trong nội dung.
+                own = (row.get("product") or {}).get("brand") or brand
+                pattern = r"(?i)^(?:" + "|".join(re.escape(x) for x in sorted({brand, own}, key=len, reverse=True)) + r")(?!\w)(?:[’']s)?[\s:–—-]*"
+                base = re.sub(pattern, "", text).strip()
+                if not base:
+                    skipped += 1
+                    continue
+                new = f"{brand} {base}" if add else base
+                changed += new != row.get("title")
+                self._set_manual_title(row, new)
+                row["title_brand_override"] = add
+                applied.append(row["id"])
+                over += len(new) > int(cfg.get("title_max_len", 80) or 80)
+            s.dirty = True
+        self.save_session(s)
+        self.log(s, f"{'Thêm' if add else 'Bỏ'} hãng: đổi {changed} tiêu đề; {over} quá 80 ký tự cần sửa AI; bỏ qua {skipped} dòng không có hãng/tên phù hợp.")
+        return {"changed": changed, "over": over, "skipped": skipped, "ids": applied}
+
     def _preselect_from_url(self, res, cfg, log=None):
         """Link gốc đã chọn sẵn màu / nhóm size -> mặc định chọn đúng như vậy (size = các size còn hàng)."""
         prod = res["product"]
@@ -673,7 +710,7 @@ class Engine:
                         r.pop("title_orig", None)
                         r["title_src"] = ""
                         # Dựng lại từ tên trên site + ", Màu, Nhóm size" đang chọn
-                        r["title_base"] = core.make_title(r["product"], cfg0, 10_000)
+                        r["title_base"] = core.make_title(r["product"], cfg0, 10_000, r.get("title_brand_override"))
                         r["title"] = r["title_base"]
                         if r.get("filters"):
                             self._apply_filters(r, r["filters"])
@@ -986,13 +1023,16 @@ class Engine:
             else:
                 if site not in fetchers:
                     sc = core.site_cfg(cfg, site)
-                    # site có Proxy-<site>.txt riêng -> bộ proxy riêng cho site đó; không có thì dùng bộ chung của lượt kiểm tra
-                    site_pool = ProxyPool(core.proxies_for(cfg, site)) if core.site_proxy_file(cfg, site) else pool
+                    # site có proxy riêng (dán trong Cài đặt hoặc file Proxy-<site>.txt) -> bộ proxy riêng cho site đó;
+                    # không có thì dùng bộ chung của lượt kiểm tra
+                    site_pool = ProxyPool(core.proxies_for(cfg, site)) if core.site_proxy_lines(cfg, site) else pool
                     fetchers[site] = Fetcher(use_proxy=bool(sc.get("use_proxy")), pool=site_pool,
                                              page_factory=lambda proxy, site=site: browser.page(proxy, camoufox=(site == "bestbuy")),
                                              log=self._tlog, should_stop=stop.is_set)
                 try:
-                    prod = validate(s.mod.scrape(fetchers[site], url))
+                    # Theo dõi cả biến thể từng list trước khi có quy tắc chọn size mới.
+                    scrape = getattr(s.mod, "scrape_for_tracking", s.mod.scrape)
+                    prod = validate(scrape(fetchers[site], url))
                 except core.Stopped:
                     self._tlog("Đã dừng theo yêu cầu.", "warn")
                     break
@@ -1145,7 +1185,7 @@ class Engine:
         cfg = core.load_config()
         cache = core.load_json(core.CACHE_PATH, {})
         s.pool = ProxyPool(core.proxies_for(cfg, s.kind))   # proxy riêng của site (Proxy-<site>.txt) đứng trước proxy chung
-        site_pf = core.site_proxy_file(cfg, s.kind)
+        site_px = len(core.site_proxy_lines(cfg, s.kind))   # proxy riêng: dán trong Cài đặt hoặc file Proxy-<site>.txt
         sc = core.site_cfg(cfg, s.kind)
         if sc.get("use_proxy") and not s.pool.proxies:
             self.log(s, "Site này đang bật proxy nhưng chưa có proxy nào — dán proxy trong Cài đặt → Proxy", "err")
@@ -1193,7 +1233,7 @@ class Engine:
                  + f"), giá {core.site_percent(cfg, s.kind):g}% giá gốc"
                  + (f", luôn đi proxy {s.pool.label()}" if sc.get("use_proxy")
                     else ", IP gốc (bị chặn sẽ tự chuyển proxy)" if s.pool.proxies else ", IP gốc (chưa có proxy)")
-                 + (f" [{len(s.pool.proxies)} proxy: {site_pf.name} dùng trước, rồi proxy chung]" if site_pf else "")
+                 + (f" [{len(s.pool.proxies)} proxy: {site_px} proxy riêng của site dùng trước, rồi proxy chung]" if site_px else "")
                  + (f", up ảnh lên {core.host_label(cfg)}" if upload else ", không up ảnh") + " ===")
         for i, item in enumerate(items, 1):
             if s.stop.is_set():
@@ -1849,10 +1889,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"removed": tracking.remove(body.get("skus") or [])})
             if path == "/api/track/revise":
                 folder = core.OUTPUT_DIR / "theo-doi" / "revise-SL0"
-                files, no_id, n = tracking.write_revise(folder)
+                files, no_id, n, no_rd = tracking.write_revise(folder)
                 if files:
                     os.startfile(folder)
-                return self._send(200, {"files": [p.name for p in files], "folder": str(folder), "no_id": no_id, "variants": n})
+                return self._send(200, {"files": [p.name for p in files], "folder": str(folder), "no_id": no_id, "variants": n,
+                                        "no_rd": no_rd})
+            if path == "/api/title-brand":
+                if body.get("action") not in ("add", "remove"):
+                    raise RuntimeError("Chọn thêm hoặc bỏ hãng")
+                return self._send(200, ENGINE.title_brand_rows(s.kind, body.get("ids", []), body["action"] == "add", body.get("titles")))
             if path == "/api/rows":
                 return self._send(200, ENGINE.update_rows(s.kind, body.get("ids", []), body.get("changes", {})))
             if path == "/api/preview":
