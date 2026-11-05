@@ -8,10 +8,13 @@ bang File Exchange / Seller Hub Reports. Moi site 1 tab. Moi Profile (acc eBay) 
 Hernest: cot Site trong file nhap ghi "Hernest". Moi link -p-ID.html lay dung SKU/mau/kich thuoc cua link,
 khong gom cac link mau/kich thuoc khac thanh mot listing. Gia la USD, tien to SKU mac dinh HER-.
 
-prAna: quan co Inseam REG thi chi lay REG; quan dung so va co 31 inch thi chi lay 31 inch.
+prAna: quan co Inseam REG thi chi lay REG. Quan dung so: 30/32/34 chi lay 32 inch;
+mau 29/31/33 chi lay 31 inch (Regular). Uu tien 32 inch neu co ca 31 va 32.
 Size so quan nu chi lay 2-16; size chu va size vong eo giu nguyen. Chi tich san size con hang,
-khong tu doi sang chieu dai khac khi REG/31 het hang. Size va Inseam duoc xuat rieng.
+khong tu doi sang chieu dai khac khi chieu dai da chon het hang. Size va Inseam duoc xuat rieng.
 Quy tac ap dung khi doc san pham moi; danh sach cu va du lieu Theo doi van duoc giu nguyen.
+prAna chong bot (PerimeterX): link co mau chi doc dung mau do (muon nhieu mau thi dan link khong co
+dwvar_..._color). Bi chan thi tool tu dung va nghi prAna 30 phut, khong doi het proxy.
 
 0. CAI DAT
    - Giai nen ca file zip vao 1 thu muc rieng (vd D:\RetailToEbay), mo RetailToEbay.exe.

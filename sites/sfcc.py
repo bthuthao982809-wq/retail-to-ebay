@@ -11,7 +11,7 @@ import json
 import re
 import urllib.parse
 
-from sites.base import SkipProduct, clean_text, dedup, html_to_lines, strip_brand_desc, to_price
+from sites.base import SiteUnavailable, SkipProduct, clean_text, dedup, html_to_lines, strip_brand_desc, to_price
 
 # Cookie ép Global-e về nước Mỹ / USD (thiếu apiVersion thì server bỏ qua cookie)
 GE_COOKIE = "GlobalE_Data=" + urllib.parse.quote(json.dumps(
@@ -192,7 +192,8 @@ def attr(prod, attr_id):
 
 
 def sfra_variants(f, host, site, master, first, color_id="color", size_id="size",
-                  images_fn=None, reuse_first=False, fixed_attributes=None, size_values=None):
+                  images_fn=None, reuse_first=False, fixed_attributes=None, size_values=None,
+                  color_values=None):
     """Đi qua từng màu (và thuộc tính phụ nếu có) của sản phẩm SFRA, trả về (colors, variants, size_name).
 
     first      : product JSON của master (đã tải) — lấy danh sách màu/thuộc tính.
@@ -201,12 +202,15 @@ def sfra_variants(f, host, site, master, first, color_id="color", size_id="size"
     Thuộc tính phụ (vd độ dài, petite) được gộp vào nhãn size: "M Petite".
     fixed_attributes: chỉ đọc các giá trị phụ đã chốt; giữ nhãn nguồn trong _site_size cho tracking.
     size_values: các mã size được phép đọc, None = giữ tất cả.
+    color_values: các mã màu được phép đọc (đỡ request), None = mọi màu.
     """
     ca = attr(first, color_id)
     sa = attr(first, size_id)
     extras = [a for a in first.get("variationAttributes") or []
               if (a.get("attributeId") or a.get("id")) not in (color_id, size_id) and a.get("values")]
     color_vals = [v for v in (ca or {}).get("values") or [] if v.get("value") or v.get("id")] or [None]
+    if color_values is not None:
+        color_vals = [v for v in color_vals if v is None or str(v.get("value") or v.get("id")) in color_values] or color_vals
     fixed_attributes = fixed_attributes or {}
     extra_values = []
     for a in extras:
@@ -238,7 +242,7 @@ def sfra_variants(f, host, site, master, first, color_id="color", size_id="size"
                 try:
                     p = get_variation(f, host, site, master, sel)
                 except SkipProduct as e:   # 1 màu tải lỗi -> bỏ màu đó, không bỏ cả sản phẩm
-                    if "Đã dừng" in str(e):
+                    if isinstance(e, SiteUnavailable) or "Đã dừng" in str(e):
                         raise
                     f.log(f"  ⚠ không đọc được lựa chọn {cname or ''} {sel}: {e} — bỏ qua", "warn")
                     continue
@@ -260,7 +264,7 @@ def sfra_variants(f, host, site, master, first, color_id="color", size_id="size"
                     try:
                         q = get_variation(f, host, site, master, {**sel, size_id: sv.get("value") or sv.get("id")})
                     except SkipProduct as e:   # 1 size tải lỗi -> bỏ size đó (không đoán giá), không bỏ cả sản phẩm
-                        if "Đã dừng" in str(e):
+                        if isinstance(e, SiteUnavailable) or "Đã dừng" in str(e):
                             raise
                         f.log(f"  ⚠ không đọc được giá size {sv.get('displayValue') or sv.get('value')} "
                               f"màu {cname or ''}: {e} — bỏ size này", "warn")

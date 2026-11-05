@@ -25,7 +25,7 @@ import core
 import ebay_api
 import sites as site_registry
 import tracking
-from sites.base import BrowserLaunchError, Fetcher, ProxyPool, SkipProduct, proxy_url, validate
+from sites.base import BrowserLaunchError, Fetcher, ProxyPool, SiteUnavailable, SkipProduct, proxy_url, validate
 
 WEB_DIR = core.ASSETS / "web"
 SESSION_DIR = core.ROOT / "sessions"   # bảng Kết quả của từng tab, lưu để mở lại tool không mất
@@ -1025,10 +1025,11 @@ class Engine:
                     sc = core.site_cfg(cfg, site)
                     # site có proxy riêng (dán trong Cài đặt hoặc file Proxy-<site>.txt) -> bộ proxy riêng cho site đó;
                     # không có thì dùng bộ chung của lượt kiểm tra
-                    site_pool = ProxyPool(core.proxies_for(cfg, site)) if core.site_proxy_lines(cfg, site) else pool
+                    site_pool = ProxyPool(core.proxies_for(cfg, site)) if site == "prana" or core.site_proxy_lines(cfg, site) else pool
                     fetchers[site] = Fetcher(use_proxy=bool(sc.get("use_proxy")), pool=site_pool,
                                              page_factory=lambda proxy, site=site: browser.page(proxy, camoufox=(site == "bestbuy")),
-                                             log=self._tlog, should_stop=stop.is_set)
+                                             log=self._tlog, should_stop=stop.is_set, fail_fast=(site == "prana"),
+                                             min_gap=getattr(s.mod, "MIN_GAP", 0.0) if s else 0.0)
                 try:
                     # Theo dõi cả biến thể từng list trước khi có quy tắc chọn size mới.
                     scrape = getattr(s.mod, "scrape_for_tracking", s.mod.scrape)
@@ -1115,7 +1116,8 @@ class Engine:
             self.log(s, text, tag)
 
         return Fetcher(use_proxy=bool(sc.get("use_proxy")), pool=s.pool,
-                       page_factory=s.browser.page if s.browser else None, log=log, should_stop=s.stop.is_set)
+                       page_factory=s.browser.page if s.browser else None, log=log, should_stop=s.stop.is_set,
+                       fail_fast=(s.kind == "prana"), min_gap=getattr(getattr(s, "mod", None), "MIN_GAP", 0.0))
 
     def _upload_pics(self, s, prod, cfg, cache, fetcher=None, plan=None, proxies=None):
         """Up ảnh theo kế hoạch (ảnh chính + ảnh từng màu + ảnh chung). Trả về (pics, info ảnh đầu, ghi chú lỗi)."""
@@ -1172,12 +1174,23 @@ class Engine:
         return pics, first_info, note
 
     def _read_product(self, s, fetcher, url, product_cache):
-        key = s.mod.product_code(url) if s.kind == "bestbuy" else None
+        key = s.mod.product_code(url) if s.kind in ("bestbuy", "prana") else None
         if key and key in product_cache:
-            self.log(s, f"  Dùng lại dữ liệu {key} đã đọc trong lượt này; ảnh đã up được dùng lại")
-            return copy.deepcopy(product_cache[key])
+            cached = product_cache[key]
+            params = parse_qs(urlparse(url).query) if s.kind == "prana" else {}
+            wanted_color = next((values[0] for name, values in params.items()
+                                 if name.lower().endswith(("color", "colour")) and values), "")
+            colors = {str(v.get("color") or "").casefold() for v in cached.get("variants", [])} if wanted_color else set()
+            partial = bool(cached.get("partial_colors")) and not wanted_color   # cache chỉ có 1 màu, link cần mọi màu
+            if not partial and (not wanted_color or wanted_color.casefold() in colors):
+                self.log(s, f"  Dùng lại dữ liệu {key} đã đọc trong lượt này; ảnh đã up được dùng lại")
+                prod = copy.deepcopy(cached)
+                if s.kind == "prana":
+                    # Màu được chọn theo URL của dòng hiện tại, kể cả link chọn tất cả màu.
+                    prod.pop("url_color", None)
+                return prod
         prod = validate(s.mod.scrape(fetcher, url))
-        if key and getattr(fetcher, "bestbuy_data_live", False):
+        if key and (s.kind == "prana" or getattr(fetcher, "bestbuy_data_live", False)):
             product_cache[key] = copy.deepcopy(prod)
         return prod
 
@@ -1206,11 +1219,13 @@ class Engine:
         # Cache chỉ dùng trong cùng lượt chạy. Khi tiếp tục, dùng dữ liệu của các dòng
         # đã xong trong chính danh sách này (không lấy file trang cũ từ lượt khác).
         def product_key(url):
-            return s.mod.product_code(url) if s.kind == "bestbuy" else None
-        if s.kind == "bestbuy" and retry:
+            return s.mod.product_code(url) if s.kind in ("bestbuy", "prana") else None
+        if s.kind in ("bestbuy", "prana") and retry:
             for row in s.results:
                 if row.get("status") == "ok" and row.get("product"):
-                    product_cache[product_key(row["url"])] = copy.deepcopy(row["product"])
+                    key = product_key(row["url"])
+                    if key:
+                        product_cache[key] = copy.deepcopy(row["product"])
         if retry or append:   # chạy lại dòng lỗi / thêm món: các dòng đã xong vẫn tính để bắt trùng
             with self.lock:
                 for k, r in enumerate(s.results, 1):
@@ -1336,6 +1351,13 @@ class Engine:
                 with self.lock:
                     res.update(status="error", error=str(e))
                 self.log(s, f"  ✗ Bỏ qua: {e}", "err")
+                if s.kind == "prana" and isinstance(e, SiteUnavailable):
+                    bot = "PerimeterX" in str(e)
+                    self._mark_rest(s, items[i:], "Chưa chạy — prAna đang chặn bot (PerimeterX)" if bot
+                                    else "Chưa chạy — prAna không còn đường truy cập khả dụng")
+                    self.log(s, f"⛔ {e}. Bấm Chạy lại dòng lỗi sau giờ đó." if bot else
+                             "⛔ prAna tạm dừng do hết đường truy cập. Bấm Chạy lại dòng lỗi khi kết nối hoạt động trở lại.", "err")
+                    break
                 if "chặn" in str(e):
                     blocked_streak += 1
                     if blocked_streak >= 2:

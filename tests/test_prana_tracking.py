@@ -38,6 +38,7 @@ def item(prod, sku="TEST-PRA-2080191"):
 class PranaTrackingTests(unittest.TestCase):
     def test_clean_export_sizes_keep_source_keys_for_single_and_multiple_variants(self):
         for suffix, sizes in (("31", ("2",)), ("31", ("2", "4")),
+                              ("32", ("28",)), ("32", ("28", "31")),
                               ("Reg", ("S",)), ("Reg", ("S", "M"))):
             with self.subTest(suffix=suffix, sizes=sizes):
                 clean = product([variant(s, f"{s} {suffix}") for s in sizes])
@@ -76,8 +77,8 @@ class PranaTrackingTests(unittest.TestCase):
         return data, fetcher
 
     def test_tracking_hook_keeps_legacy_lengths_and_sizes_excluded_by_new_rule(self):
-        raw = product([variant("0 29"), variant("2 31"), variant("18 33")])
-        clean = product([variant("2", "2 31")])
+        raw = product([variant("0 29"), variant("2 31"), variant("28 32"), variant("18 33")])
+        clean = product([variant("28", "28 32")])
         legacy = tracking.entry_from(item(raw, "OLD-PRA-2080191"), CFG, "prana")
         new = tracking.entry_from(item(clean, "NEW-PRA-2080191"), CFG, "prana")
         mod = SimpleNamespace(KEY="prana", NAME="prAna", scrape=Mock(return_value=clean),
@@ -93,8 +94,8 @@ class PranaTrackingTests(unittest.TestCase):
             self.assertTrue(all(r["available"] for r in checks.values()))
 
     def test_csv_only_import_can_match_new_variants_without_saved_source_keys(self):
-        clean = product([variant("2", "2 31"), variant("4", "4 31")])
-        raw = product([variant("0 29"), variant("2 31"), variant("4 31"), variant("18 33")])
+        clean = product([variant("28", "28 32"), variant("31", "31 32")])
+        raw = product([variant("0 29"), variant("2 31"), variant("28 32"), variant("31 32"), variant("18 33")])
         imported = tracking.entry_from(item(clean), CFG, "prana")
         # Import CSV ở máy khác chỉ có SKU biến thể, không có khóa màu/size gốc trong session.
         for v in imported["variants"]:

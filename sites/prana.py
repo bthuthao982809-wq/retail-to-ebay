@@ -3,12 +3,14 @@
 Product-Variation?pid=<mã>&dwvar_<mã>_color=<tên màu>&format=ajax -> JSON. Mỗi màu 1 request (lấy ảnh + giá
 của màu đó). Tồn kho từng màu × size nằm sẵn trong product.variantData {"<mã>-<màu>-<size>": {color, size, inventory}}.
 Link ghi màu bằng tên (dwvar_2163601_color=Heather%20Grey). Ảnh Amplience media.prana.com/i/prana/<tên>.
-Có PerimeterX nhưng chưa thấy chặn; bị chặn thì tool tự chuyển proxy.
+Có PerimeterX (HUMAN): chấm điểm theo kiểu request, đọc dồn nhiều request là bị 403 captcha ở mọi IP.
+Nên link có màu thì chỉ đọc màu đó (1–2 request/link), Fetcher giãn cách request (MIN_GAP) và gặp
+PerimeterX thì dừng cả lượt (sites.base.BOT_COOLDOWN) thay vì đổi hết proxy.
 """
 import re
 import urllib.parse
 
-from sites.base import SkipProduct, dedup, strip_brand, validate
+from sites.base import SiteUnavailable, SkipProduct, dedup, strip_brand, validate
 from sites.sfcc import amplience, attr, get_variation, make_bullets, sfra_variants, titlecase, usd_price
 
 KEY = "prana"
@@ -18,6 +20,7 @@ NEEDS_PROXY = False
 EXAMPLES = ["https://www.prana.com/p/sunday-river-crewneck-sweater/2163601.html?dwvar_2163601_color=Heather%20Grey"]
 
 HOST = "www.prana.com"
+MIN_GAP = 2.0   # giây tối thiểu giữa 2 request tới prAna
 SITE = "Sites-Prana_US-Site"
 BRANDS = ("prAna", "Prana", "PRANA")
 DEPT = {"women": "Women", "womens": "Women", "men": "Men", "mens": "Men"}
@@ -48,7 +51,19 @@ def _attrs(p):
     return out
 
 
-def _variants(f, master, first):
+def _link_colors(first, url_color):
+    """Mã màu của màu ghi trên link (so tên / mã, không phân biệt hoa thường). None = đọc mọi màu."""
+    want = (url_color or "").strip().casefold()
+    if not want:
+        return None
+    for cv in (attr(first, "color") or {}).get("values") or []:
+        names = (cv.get("value"), cv.get("id"), cv.get("displayValue"))
+        if any(str(n or "").strip().casefold() == want for n in names):
+            return {str(cv.get("value") or cv.get("id"))}
+    return None   # màu trên link không còn: đọc mọi màu như cũ
+
+
+def _variants(f, master, first, color_values=None):
     """(colors, variants, size_name) theo variantData (tồn kho thật). Trả None nếu cấu trúc lạ -> dùng sfra_variants."""
     ca, sa = attr(first, "color"), attr(first, "size")
     vdata = first.get("variantData") or {}
@@ -60,11 +75,13 @@ def _variants(f, master, first):
     colors, variants = [], []
     for cv in ca.get("values") or []:
         cid = cv.get("value") or cv.get("id")
+        if color_values is not None and str(cid) not in color_values:
+            continue
         cname = titlecase(cv.get("displayValue") or cid)
         try:
             p = first if cv.get("selected") else get_variation(f, HOST, SITE, master, {"color": cid})
         except SkipProduct as e:   # 1 màu tải lỗi -> bỏ màu đó, không bỏ cả sản phẩm
-            if "Đã dừng" in str(e):
+            if isinstance(e, SiteUnavailable) or "Đã dừng" in str(e):
                 raise
             f.log(f"  ⚠ không đọc được màu {cname}: {e} — bỏ màu này", "warn")
             continue
@@ -85,9 +102,9 @@ def _variants(f, master, first):
 
 
 def _listing_options(first):
-    """Quần: chỉ REG nếu site dùng tên, hoặc 31 inch; size số quần nữ chỉ 2–16.
+    """Quần: chỉ REG nếu site dùng tên; chiều dài số chọn 32, không có thì 31.
 
-    Size chữ và size theo vòng eo không đổi. Không có REG/31 thì không tự đoán chiều dài.
+    Size số quần nữ chỉ 2–16. Size chữ và size theo vòng eo không đổi.
     """
     text = " ".join(str(first.get(k) or "") for k in
                     ("productName", "tileName", "variantName", "primaryCategoryID", "parentCategoryID"))
@@ -98,12 +115,15 @@ def _listing_options(first):
     chosen = next((v for v in dimensions if any(str(v.get(k) or "").lower() in ("rg", "reg", "regular")
                                                for k in ("value", "id", "displayValue"))), None)
     if chosen is None:
-        chosen = next((v for v in dimensions if str(v.get("value") or v.get("id")) == "31"), None)
+        for length in ("32", "31"):
+            chosen = next((v for v in dimensions if str(v.get("value") or v.get("id")) == length), None)
+            if chosen is not None:
+                break
     if chosen is not None:
         value = str(chosen.get("value") or chosen.get("id"))
         fixed["dimension"] = value
-        if value == "31":
-            inseam = "31 in"
+        if value in ("32", "31"):
+            inseam = f"{value} in"
         else:
             attrs = _attrs(first)
             for text in attrs.get("inseamLength", []) + attrs.get("features", []):
@@ -118,7 +138,7 @@ def _listing_options(first):
     return fixed, allowed, inseam
 
 
-def scrape(f, url, apply_listing_rules=True):
+def scrape(f, url, apply_listing_rules=True, all_colors=False):
     code = product_code(url)
     if not code:
         raise SkipProduct("Không đọc được mã sản phẩm từ link")
@@ -130,18 +150,20 @@ def scrape(f, url, apply_listing_rules=True):
         raise SkipProduct("Sản phẩm không còn bán")
 
     fixed, allowed_sizes, inseam = _listing_options(first) if apply_listing_rules else ({}, None, "")
-    res = _variants(f, master, first)
+    # Link có màu -> chỉ đọc màu đó (mỗi màu thêm 1 request, đọc dồn là bị PerimeterX chặn)
+    color_values = None if all_colors else _link_colors(first, url_color)
+    res = _variants(f, master, first, color_values)
     if res:
         colors, variants, size_name = res
         common = []
     else:
         colors, variants, size_name, common = sfra_variants(
             f, HOST, SITE, master, first, images_fn=_images,
-            fixed_attributes=fixed, size_values=allowed_sizes)
+            fixed_attributes=fixed, size_values=allowed_sizes, color_values=color_values)
     if allowed_sizes is not None:
         variants = [v for v in variants if (v["size"].split() or [""])[0] in allowed_sizes]
     if not variants and (fixed or allowed_sizes is not None):
-        raise SkipProduct("Không có biến thể phù hợp quy tắc prAna: chiều dài REG/31, size số 2–16")
+        raise SkipProduct("Không có biến thể phù hợp quy tắc prAna: chiều dài REG/32/31, size số 2–16")
 
     a = _attrs(first)
     details = {}
@@ -183,11 +205,13 @@ def scrape(f, url, apply_listing_rules=True):
     }
     if url_color:
         prod["url_color"] = titlecase(url_color)
+    if color_values is not None:
+        prod["partial_colors"] = True   # chỉ có màu của link: link khác cùng mã phải đọc lại, không dùng cache
     if inseam:
         prod["fixed_inseam"] = inseam
     return validate(prod)
 
 
 def scrape_for_tracking(f, url):
-    """Đọc đủ chiều dài/size nguồn để kiểm tra đúng cả các listing đã xuất trước quy tắc mới."""
-    return scrape(f, url, apply_listing_rules=False)
+    """Đọc đủ màu, chiều dài, size nguồn để kiểm tra đúng cả các listing đã xuất trước quy tắc mới."""
+    return scrape(f, url, apply_listing_rules=False, all_colors=True)
