@@ -15,7 +15,9 @@ BATCH = 8   # số sản phẩm mỗi lần gọi
 # Tên hãng / site không được xuất hiện trong tiêu đề (listing để Unbranded)
 SITE_BRANDS = ["Theory", "Banana Republic", "Touch of Class", "Janie and Jack", "Janie & Jack", "Eileen Fisher",
                "Azazie", "Soho Home", "Soho House", "Talbots", "Personal Creations", "Gap", "Tommy Bahama", "prAna",
-               "Sonos", "Belkin", "Sanus", "Sonance"]
+               "Sonos", "Belkin", "Sanus", "Sonance", "Hernest"]
+# Tên hãng cũng là chữ thường gặp ("Thigh Gap", "Color Theory"): chỉ bỏ khi sản phẩm thuộc đúng site đó
+GENERIC_BRANDS = {"gap": "bananarepublic", "theory": "theory"}
 BANNED = ["free shipping", "l@@k", "wow", "authentic", "genuine", "nwt", "new with tags", "brand new"]
 
 # Phần quy tắc viết tiêu đề — người dùng xem / sửa được trong Cài đặt (ô trống = dùng bản này)
@@ -75,7 +77,7 @@ def product_brief(item, cfg):
     spec = {k: v for k, v in spec.items() if k.lower() != "brand"}
     api = item.get("category_api") or {}
     extra = item.get("title_extra", "")   # ", Màu, Nhóm size" người dùng đã chọn -> tool tự gắn vào cuối
-    brand = core.title_brand(prod, cfg)   # tên hãng: tool tự gắn vào đầu
+    brand = core.title_brand(prod, cfg, item.get("title_brand_override"))
     return {
         "id": item["id"],
         "max_len": max_len(cfg) - (len(extra) + 2 if extra else 0) - (len(brand) + 1 if brand else 0),
@@ -270,7 +272,8 @@ def clean_title(title, item, limit=80, brand=""):
     prod = item.get("product") or {}
     own = prod.get("brand", "")   # tên hãng của sản phẩm: luôn bỏ khỏi chữ AI viết (brand ở tham số mới là chữ gắn đầu)
     t = re.sub(r"\s{2,}", " ", t)
-    for b in SITE_BRANDS + ([own] if own else []) + trademarks(prod.get("title", "")):
+    brands = [b for b in SITE_BRANDS if GENERIC_BRANDS.get(b.lower(), prod.get("site")) == prod.get("site")]
+    for b in brands + ([own] if own else []) + trademarks(prod.get("title", "")):
         t = re.sub(rf"(?i)\b{re.escape(b)}\b['’]?s?", " ", t)
     for w in BANNED:
         t = re.sub(rf"(?i)\b{re.escape(w)}\b", " ", t)
@@ -412,7 +415,7 @@ def write_titles(items, cfg, log=None, should_stop=None):
             it = by_id.get(str(d.get("id")))
             if not it:
                 continue
-            t = clean_title(str(d.get("title", "")), it, max_len(cfg), core.title_brand(it["product"], cfg))
+            t = clean_title(str(d.get("title", "")), it, max_len(cfg), core.title_brand(it["product"], cfg, it.get("title_brand_override")))
             if len(t) >= 20:
                 out[it["id"]] = t
         log(f"  AI đã viết {sum(1 for it in chunk if it['id'] in out)}/{len(chunk)} tiêu đề (lô {i // BATCH + 1})")

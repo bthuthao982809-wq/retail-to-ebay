@@ -25,7 +25,8 @@ import core
 import ebay_api
 import sites as site_registry
 import tracking
-from sites.base import BrowserLaunchError, Fetcher, ProxyPool, SkipProduct, proxy_url, validate
+from sites.base import BrowserLaunchError, Fetcher, ProxyPool, SiteUnavailable, SiteWaiting, SkipProduct, proxy_url, validate
+from sites.prana_browser import PranaBrowserFetcher, _alert_user as prana_alert
 
 WEB_DIR = core.ASSETS / "web"
 SESSION_DIR = core.ROOT / "sessions"   # bảng Kết quả của từng tab, lưu để mở lại tool không mất
@@ -50,6 +51,8 @@ class Session:
         self.dirty = False          # đã đổi Profile/Category... sau lần xuất gần nhất
         self.ai_running = False     # đang nhờ AI viết tiêu đề
         self.phase = ""             # việc tab đang làm sau khi chạy xong link (kiểm ảnh 40/182, AI, ghi CSV) -> hiện ở thanh Kiểm tra & sửa
+        self.wait_reason = ""       # prAna: chờ người dùng xác minh hoặc hết thời gian thử lại
+        self.wait_until = 0.0
         self.stop = threading.Event()   # nút Dừng của RIÊNG tab này (không dừng nhầm tab khác)
         self.pool = ProxyPool([])       # proxy của lần chạy đang chạy (mỗi site 1 bộ: chạy song song không giẫm nhau)
         self.browser = None             # Chrome riêng của lần chạy (chỉ mở khi site cần, vd Touch of Class)
@@ -156,6 +159,42 @@ class Engine:
             if s.results:
                 s.progress = [len(s.results), len(s.results)]
                 s.logs.append({"t": time.strftime("%H:%M:%S"), "text": f"Đã mở lại kết quả lần chạy trước ({len(s.results)} dòng).", "tag": ""})
+            if s.kind == "prana":
+                self._fix_prana_rows(s)
+
+    def _fix_prana_rows(self, s):
+        """Dòng prAna đọc trước bản sửa: kiểu dáng / chiều dài gộp vào Size ("M Standard", "33 8") -> eBay báo lỗi Size.
+        Chuyển ngay trên dữ liệu đã có (không đọc lại site); bấm Xuất CSV là có file mới."""
+        cfg, fixed = core.load_config(), 0
+        for r in s.results:
+            prod = r.get("product")
+            if not prod:
+                continue
+            try:
+                mapping = s.mod.fix_stored(prod, r.get("url", ""))
+            except Exception:
+                traceback.print_exc()
+                continue
+            if mapping is None:
+                continue
+            fixed += 1
+            if r.get("variant_sel") is not None:
+                new_sel = []
+                for key in r["variant_sel"]:
+                    color, _, size = key.partition("||")
+                    if size in mapping:
+                        new_sel.append(f"{color}||{mapping[size]}")
+                r["variant_sel"] = new_sel
+            try:
+                r.update(price_info(prod, cfg, r))
+            except Exception:
+                traceback.print_exc()
+        if fixed:
+            s.dirty = True
+            s.logs.append({"t": time.strftime("%H:%M:%S"), "tag": "warn",
+                           "text": f"Đã sửa {fixed} dòng prAna có kiểu dáng / chiều dài gộp vào Size "
+                                   "(chuyển sang Fit / Inseam) — bấm Xuất CSV để có file mới."})
+            self.save_session(s)
 
     # ---- trạng thái cho giao diện
 
@@ -182,7 +221,25 @@ class Engine:
                 "dirty": s.dirty,
                 "ai_running": s.ai_running,
                 "phase": s.phase,
+                "wait": self._wait_status(s),
             }
+
+    @staticmethod
+    def _wait_status(s):
+        reason = getattr(s, "wait_reason", "") if s.kind == "prana" else ""
+        until = float(getattr(s, "wait_until", 0) or 0) if reason else 0.0
+        active = bool(reason) and (until > time.time() or (not until and s.running))
+        return {"reason": reason, "until": until, "active": active}
+
+    def _check_wait(self, s):
+        """Kiểm tra trước khi sửa bảng hoặc đưa tác vụ mới vào hàng đợi."""
+        wait = self._wait_status(s)
+        if wait["active"]:
+            remaining = max(0, int(wait["until"] - time.time()) + 1) if wait["until"] else 0
+            suffix = f" Thử lại sau {remaining} giây." if remaining else ""
+            raise RuntimeError(wait["reason"] + suffix)
+        if s.kind == "prana":
+            s.wait_reason, s.wait_until = "", 0.0
 
     def retry_errors(self, tab, upload, rid=None, only=None):
         """Nút "↻ Chạy lại dòng lỗi": chạy lại các dòng lỗi ngay tại chỗ, giữ nguyên các dòng đã xong.
@@ -190,6 +247,7 @@ class Engine:
         only="failed": chỉ các dòng lỗi thật."""
         s = self.session(tab)
         with self.lock:
+            self._check_wait(s)
             if s.running or s.ai_running:
                 raise RuntimeError(f"Tab {s.label} đang chạy, chờ xong hoặc bấm Dừng")
             rows = [r for r in s.results if r["status"] == "error" and (rid is None or r["id"] == rid)
@@ -213,6 +271,7 @@ class Engine:
         if not urls:
             raise RuntimeError("Chưa chọn món nào")
         with self.lock:
+            self._check_wait(s)
             if s.running or s.ai_running:
                 raise RuntimeError(f"Tab {s.label} đang chạy, chờ xong hoặc bấm Dừng")
             items = [{"url": u, "key": None, "profile": src.get("profile", ""), "country": src.get("country") or "US",
@@ -227,6 +286,7 @@ class Engine:
         """items: [{url, key, profile, country}] (từ ô dán link hoặc file import)."""
         s = self.session(tab)
         with self.lock:
+            self._check_wait(s)
             if s.running:
                 raise RuntimeError(f"Tab {s.label} đang chạy, chờ xong hoặc bấm Dừng")
             if s.ai_running:   # AI đang viết tiêu đề cho các dòng cũ: chạy mới sẽ đè id dòng -> tiêu đề lệch
@@ -446,6 +506,43 @@ class Engine:
         else:
             res["title_base"], res["title_extra"] = text, ""
         res["title"] = text
+
+    def title_brand_rows(self, tab, ids, add, titles=None):
+        """Chỉ thêm/bỏ tiền tố hãng trên tiêu đề hiện tại, giữ phần AI và đuôi màu/size."""
+        s = self.session(tab)
+        cfg = core.load_config()
+        titles = titles or {}
+        changed = skipped = over = 0
+        applied = []
+        with self.lock:
+            if s.running or s.ai_running:
+                raise RuntimeError("Tab đang chạy — chờ xong rồi sửa tên hãng")
+            rows = [r for r in s.results if r.get("status") == "ok" and (not ids or r["id"] in ids)]
+            if not rows:
+                raise RuntimeError("Chưa có dòng thành công để sửa tên hãng")
+            for row in rows:
+                brand = core.title_brand(row.get("product") or {}, cfg, True)
+                if not brand:
+                    skipped += 1
+                    continue
+                text = str(titles.get(row["id"], row.get("title") or "")).strip()
+                # Chỉ bỏ tiền tố, không đụng tên model / chữ hãng nằm trong nội dung.
+                own = (row.get("product") or {}).get("brand") or brand
+                pattern = r"(?i)^(?:" + "|".join(re.escape(x) for x in sorted({brand, own}, key=len, reverse=True)) + r")(?!\w)(?:[’']s)?[\s:–—-]*"
+                base = re.sub(pattern, "", text).strip()
+                if not base:
+                    skipped += 1
+                    continue
+                new = f"{brand} {base}" if add else base
+                changed += new != row.get("title")
+                self._set_manual_title(row, new)
+                row["title_brand_override"] = add
+                applied.append(row["id"])
+                over += len(new) > int(cfg.get("title_max_len", 80) or 80)
+            s.dirty = True
+        self.save_session(s)
+        self.log(s, f"{'Thêm' if add else 'Bỏ'} hãng: đổi {changed} tiêu đề; {over} quá 80 ký tự cần sửa AI; bỏ qua {skipped} dòng không có hãng/tên phù hợp.")
+        return {"changed": changed, "over": over, "skipped": skipped, "ids": applied}
 
     def _preselect_from_url(self, res, cfg, log=None):
         """Link gốc đã chọn sẵn màu / nhóm size -> mặc định chọn đúng như vậy (size = các size còn hàng)."""
@@ -673,7 +770,7 @@ class Engine:
                         r.pop("title_orig", None)
                         r["title_src"] = ""
                         # Dựng lại từ tên trên site + ", Màu, Nhóm size" đang chọn
-                        r["title_base"] = core.make_title(r["product"], cfg0, 10_000)
+                        r["title_base"] = core.make_title(r["product"], cfg0, 10_000, r.get("title_brand_override"))
                         r["title"] = r["title_base"]
                         if r.get("filters"):
                             self._apply_filters(r, r["filters"])
@@ -887,7 +984,8 @@ class Engine:
                 self.slot_cv.wait(2)
             self.active += 1
         prof = core.PROFILE_DIR if s.kind == "touchofclass" else core.PROFILE_DIR.with_name(f"{core.PROFILE_DIR.name}-{s.kind}")
-        s.browser = _Browser(lambda text, tag="": self.log(s, text, tag), prof, camoufox=(s.kind == "bestbuy"))
+        s.browser = _Browser(lambda text, tag="": self.log(s, text, tag), prof,
+                             camoufox=(s.kind in ("bestbuy", "prana")), filter_resources=(s.kind != "prana"))
         try:
             self._run(s, items, upload)
         except Exception as e:
@@ -986,13 +1084,23 @@ class Engine:
             else:
                 if site not in fetchers:
                     sc = core.site_cfg(cfg, site)
-                    # site có Proxy-<site>.txt riêng -> bộ proxy riêng cho site đó; không có thì dùng bộ chung của lượt kiểm tra
-                    site_pool = ProxyPool(core.proxies_for(cfg, site)) if core.site_proxy_file(cfg, site) else pool
-                    fetchers[site] = Fetcher(use_proxy=bool(sc.get("use_proxy")), pool=site_pool,
-                                             page_factory=lambda proxy, site=site: browser.page(proxy, camoufox=(site == "bestbuy")),
-                                             log=self._tlog, should_stop=stop.is_set)
+                    # site có proxy riêng (dán trong Cài đặt hoặc file Proxy-<site>.txt) -> bộ proxy riêng cho site đó;
+                    # không có thì dùng bộ chung của lượt kiểm tra
+                    site_pool = ProxyPool(core.proxies_for(cfg, site)) if site == "prana" or core.site_proxy_lines(cfg, site) else pool
+                    factory = PranaBrowserFetcher if site == "prana" else Fetcher
+                    recovery_options = {"reset_browser": browser.close} if site == "prana" else {}
+                    fetchers[site] = factory(use_proxy=bool(sc.get("use_proxy")), pool=site_pool,
+                                             page_factory=lambda proxy, site=site: browser.page(
+                                                 proxy, camoufox=(site in ("bestbuy", "prana")), filter_resources=(site != "prana")),
+                                             log=self._tlog, should_stop=stop.is_set, fail_fast=(site == "prana"),
+                                             min_gap=getattr(s.mod, "MIN_GAP", 0.0) if s else 0.0,
+                                             **recovery_options)
                 try:
-                    prod = validate(s.mod.scrape(fetchers[site], url))
+                    # Theo dõi cả biến thể từng list trước khi có quy tắc chọn size mới.
+                    scrape = getattr(s.mod, "scrape_for_tracking", s.mod.scrape)
+                    if site == "prana":
+                        fetchers[site].prepare_product(url)
+                    prod = validate(scrape(fetchers[site], url))
                 except core.Stopped:
                     self._tlog("Đã dừng theo yêu cầu.", "warn")
                     break
@@ -1074,8 +1182,25 @@ class Engine:
         def log(text, tag=""):
             self.log(s, text, tag)
 
-        return Fetcher(use_proxy=bool(sc.get("use_proxy")), pool=s.pool,
-                       page_factory=s.browser.page if s.browser else None, log=log, should_stop=s.stop.is_set)
+        options = dict(use_proxy=bool(sc.get("use_proxy")), pool=s.pool,
+                       page_factory=s.browser.page if s.browser else None, log=log, should_stop=s.stop.is_set,
+                       fail_fast=(s.kind == "prana"), min_gap=getattr(getattr(s, "mod", None), "MIN_GAP", 0.0))
+        if s.kind == "prana":
+            def set_wait(reason, until=0):
+                with self.lock:
+                    s.wait_reason, s.wait_until = reason, until
+                    s.phase = reason
+
+            def clear_wait():
+                with self.lock:
+                    s.wait_reason, s.wait_until = "", 0
+                    s.phase = ""
+
+            # Chờ người dùng xác minh tối đa 5 phút; kêu + nhấp nháy cửa sổ Camoufox để nhắc
+            return PranaBrowserFetcher(**options, set_wait=set_wait, clear_wait=clear_wait,
+                                       verification_timeout=300, alert=prana_alert,
+                                       reset_browser=s.browser.close if s.browser else None)
+        return Fetcher(**options)
 
     def _upload_pics(self, s, prod, cfg, cache, fetcher=None, plan=None, proxies=None):
         """Up ảnh theo kế hoạch (ảnh chính + ảnh từng màu + ảnh chung). Trả về (pics, info ảnh đầu, ghi chú lỗi)."""
@@ -1131,21 +1256,61 @@ class Engine:
         note = f"{failed} ảnh up lỗi" if failed else ""
         return pics, first_info, note
 
+    @staticmethod
+    def _prana_url_color(url):
+        params = parse_qs(urlparse(url).query)
+        return next((values[0].strip().casefold() for name, values in params.items()
+                     if name.lower().endswith(("color", "colour")) and values), "")
+
+    @staticmethod
+    def _prana_cache_key(mod, url, product):
+        # Quy tắc listing chốt Inseam từ dữ liệu site, kể cả khi URL ghi chiều dài khác.
+        color = Engine._prana_url_color(url) if product.get("partial_colors") else ""
+        inseam = str(product.get("fixed_inseam") or "site-dimensions").strip().casefold()
+        return "prana", str(mod.product_code(url)), color, inseam
+
     def _read_product(self, s, fetcher, url, product_cache):
-        key = s.mod.product_code(url) if s.kind == "bestbuy" else None
-        if key and key in product_cache:
-            self.log(s, f"  Dùng lại dữ liệu {key} đã đọc trong lượt này; ảnh đã up được dùng lại")
-            return copy.deepcopy(product_cache[key])
+        code = s.mod.product_code(url) if s.kind in ("bestbuy", "prana") else None
+        cached = None
+        if code and s.kind == "prana":
+            wanted_color = self._prana_url_color(url)
+            # Duyệt mới nhất trước: một màu đọc thêm không ghi đè dữ liệu các màu trước đó.
+            candidates = [value for key, value in reversed(list(product_cache.items()))
+                          if isinstance(key, tuple) and len(key) == 4
+                          and key[:2] == ("prana", str(code)) and key[2] in (wanted_color, "")]
+            if code in product_cache:   # cache trong bộ nhớ của các caller cũ
+                candidates.append(product_cache[code])
+            for candidate in candidates:
+                colors = {str(v.get("color") or "").strip().casefold()
+                          for v in candidate.get("variants", [])}
+                if candidate.get("partial_colors") and not wanted_color:
+                    continue
+                if not wanted_color or wanted_color in colors:
+                    cached = candidate
+                    break
+        elif code and s.kind == "bestbuy":
+            cached = product_cache.get(code)
+        if cached is not None:
+            self.log(s, f"  Dùng lại dữ liệu {code} đã đọc trong lượt này; ảnh đã up được dùng lại")
+            prod = copy.deepcopy(cached)
+            if s.kind == "prana":
+                prod.pop("url_color", None)
+            return prod
+        prepare = getattr(fetcher, "prepare_product", None)
+        if prepare:
+            prepare(url)
         prod = validate(s.mod.scrape(fetcher, url))
-        if key and getattr(fetcher, "bestbuy_data_live", False):
-            product_cache[key] = copy.deepcopy(prod)
+        if code and s.kind == "prana":
+            product_cache[self._prana_cache_key(s.mod, url, prod)] = copy.deepcopy(prod)
+        elif code and getattr(fetcher, "bestbuy_data_live", False):
+            product_cache[code] = copy.deepcopy(prod)
         return prod
 
     def _run(self, s, items, upload):
         cfg = core.load_config()
         cache = core.load_json(core.CACHE_PATH, {})
         s.pool = ProxyPool(core.proxies_for(cfg, s.kind))   # proxy riêng của site (Proxy-<site>.txt) đứng trước proxy chung
-        site_pf = core.site_proxy_file(cfg, s.kind)
+        site_px = len(core.site_proxy_lines(cfg, s.kind))   # proxy riêng: dán trong Cài đặt hoặc file Proxy-<site>.txt
         sc = core.site_cfg(cfg, s.kind)
         if sc.get("use_proxy") and not s.pool.proxies:
             self.log(s, "Site này đang bật proxy nhưng chưa có proxy nào — dán proxy trong Cài đặt → Proxy", "err")
@@ -1165,12 +1330,13 @@ class Engine:
         product_cache = {}
         # Cache chỉ dùng trong cùng lượt chạy. Khi tiếp tục, dùng dữ liệu của các dòng
         # đã xong trong chính danh sách này (không lấy file trang cũ từ lượt khác).
-        def product_key(url):
-            return s.mod.product_code(url) if s.kind == "bestbuy" else None
-        if s.kind == "bestbuy" and retry:
+        if s.kind in ("bestbuy", "prana") and retry:
             for row in s.results:
                 if row.get("status") == "ok" and row.get("product"):
-                    product_cache[product_key(row["url"])] = copy.deepcopy(row["product"])
+                    key = (self._prana_cache_key(s.mod, row["url"], row["product"]) if s.kind == "prana"
+                           else s.mod.product_code(row["url"]))
+                    if key:
+                        product_cache[key] = copy.deepcopy(row["product"])
         if retry or append:   # chạy lại dòng lỗi / thêm món: các dòng đã xong vẫn tính để bắt trùng
             with self.lock:
                 for k, r in enumerate(s.results, 1):
@@ -1193,7 +1359,7 @@ class Engine:
                  + f"), giá {core.site_percent(cfg, s.kind):g}% giá gốc"
                  + (f", luôn đi proxy {s.pool.label()}" if sc.get("use_proxy")
                     else ", IP gốc (bị chặn sẽ tự chuyển proxy)" if s.pool.proxies else ", IP gốc (chưa có proxy)")
-                 + (f" [{len(s.pool.proxies)} proxy: {site_pf.name} dùng trước, rồi proxy chung]" if site_pf else "")
+                 + (f" [{len(s.pool.proxies)} proxy: {site_px} proxy riêng của site dùng trước, rồi proxy chung]" if site_px else "")
                  + (f", up ảnh lên {core.host_label(cfg)}" if upload else ", không up ảnh") + " ===")
         for i, item in enumerate(items, 1):
             if s.stop.is_set():
@@ -1203,6 +1369,7 @@ class Engine:
             url = item["url"]
             with self.lock:
                 old = next((r for r in s.results if r["id"] == item.get("retry_id")), None) if item.get("retry_id") else None
+                previous_row = copy.deepcopy(old) if old is not None else None
                 if old is not None:   # chạy lại dòng lỗi: dùng lại đúng dòng đó trong bảng
                     old.clear()
                     old.update(id=item["retry_id"], url=url, status="running", source=s.kind,
@@ -1292,10 +1459,32 @@ class Engine:
                 self.log(s, "Đã dừng theo yêu cầu.", "warn")
                 self._mark_rest(s, items[i:], "Chưa chạy — đã bấm Dừng")
                 break
+            except SiteWaiting as e:
+                with self.lock:
+                    if previous_row is not None:
+                        res.clear()
+                        res.update(previous_row)
+                    else:
+                        res.update(status="error", error="Chưa chạy — chờ xác minh prAna")
+                    s.wait_reason, s.wait_until = str(e), e.until
+                    s.progress = [progress_base + i - 1, progress_total]
+                # Các dòng retry đã có sẵn trạng thái chờ/lỗi. Chỉ thêm các dòng mới chưa có trong bảng.
+                remaining_new = [row for row in items[i:] if not row.get("retry_id")]
+                if remaining_new:
+                    self._mark_rest(s, remaining_new, "Chưa chạy — chờ xác minh prAna")
+                self.log(s, f"⏸ {e}", "warn")
+                break
             except SkipProduct as e:
                 with self.lock:
                     res.update(status="error", error=str(e))
                 self.log(s, f"  ✗ Bỏ qua: {e}", "err")
+                if s.kind == "prana" and isinstance(e, SiteUnavailable):
+                    bot = "PerimeterX" in str(e)
+                    self._mark_rest(s, items[i:], "Chưa chạy — prAna đang chặn bot (PerimeterX)" if bot
+                                    else "Chưa chạy — prAna không còn đường truy cập khả dụng")
+                    self.log(s, f"⛔ {e}. Bấm Chạy lại dòng lỗi sau giờ đó." if bot else
+                             "⛔ prAna tạm dừng do hết đường truy cập. Bấm Chạy lại dòng lỗi khi kết nối hoạt động trở lại.", "err")
+                    break
                 if "chặn" in str(e):
                     blocked_streak += 1
                     if blocked_streak >= 2:
@@ -1408,16 +1597,21 @@ class _Browser:
     """Chrome riêng của 1 luồng (lần chạy 1 site / lượt Theo dõi sản phẩm). Playwright chỉ dùng được trên thread đã tạo
     nó; mỗi luồng 1 thư mục profile riêng để chạy song song không giành nhau. Chỉ mở khi site cần trình duyệt."""
 
-    def __init__(self, log, profile, camoufox=False):
+    def __init__(self, log, profile, camoufox=False, filter_resources=True):
         self.log = log
         self.profile = profile
         self.pw = None
         self.ctx = None
         self.proxy = "none"
         self.camoufox = camoufox
+        self.filter_resources = filter_resources
         self.owned = OwnedBrowserProcesses()
 
-    def page(self, proxy, camoufox=None):
+    def page(self, proxy, camoufox=None, filter_resources=None):
+        if filter_resources is not None and filter_resources != self.filter_resources:
+            if self.ctx is not None:
+                self._close_ctx()
+            self.filter_resources = filter_resources
         if camoufox is not None and camoufox != self.camoufox:
             if self.ctx is not None:
                 self._close_ctx()
@@ -1437,7 +1631,7 @@ class _Browser:
             kw["proxy"] = proxy
         self.ctx = self._launch(kw)
         self.proxy = want
-        if proxy:
+        if proxy and self.filter_resources:
             self.ctx.route("**/*", _proxy_route)
         return self.ctx.pages[0] if self.ctx.pages else self.ctx.new_page()
 
@@ -1725,7 +1919,8 @@ class Handler(BaseHTTPRequestHandler):
                 site_changed = {(t, k) for t, sc in cfg["sites"].items()
                                 for k in set(sc) | set(old["sites"].get(t, {}))
                                 if sc.get(k) != old["sites"].get(t, {}).get(k)}
-                site_changed = {(t, k) for t, k in site_changed if k not in ("use_proxy", "delay", "prefix")}
+                # brand_in_title: áp dụng cho lần chạy sau (không dựng lại tiêu đề đã có / đã sửa tay)
+                site_changed = {(t, k) for t, k in site_changed if k not in ("use_proxy", "delay", "prefix", "brand_in_title")}
                 if changed <= PRICE_KEYS and all(k == "price_percent" for _, k in site_changed):
                     # chỉ đổi giá: tính lại giá (nhanh) — đổi % chung thì mọi tab, đổi % 1 site thì site đó
                     tabs = list(ENGINE.sessions) if changed else {t for t, _ in site_changed}
@@ -1848,10 +2043,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"removed": tracking.remove(body.get("skus") or [])})
             if path == "/api/track/revise":
                 folder = core.OUTPUT_DIR / "theo-doi" / "revise-SL0"
-                files, no_id, n = tracking.write_revise(folder)
+                files, no_id, n, no_rd = tracking.write_revise(folder)
                 if files:
                     os.startfile(folder)
-                return self._send(200, {"files": [p.name for p in files], "folder": str(folder), "no_id": no_id, "variants": n})
+                return self._send(200, {"files": [p.name for p in files], "folder": str(folder), "no_id": no_id, "variants": n,
+                                        "no_rd": no_rd})
+            if path == "/api/title-brand":
+                if body.get("action") not in ("add", "remove"):
+                    raise RuntimeError("Chọn thêm hoặc bỏ hãng")
+                return self._send(200, ENGINE.title_brand_rows(s.kind, body.get("ids", []), body["action"] == "add", body.get("titles")))
             if path == "/api/rows":
                 return self._send(200, ENGINE.update_rows(s.kind, body.get("ids", []), body.get("changes", {})))
             if path == "/api/preview":

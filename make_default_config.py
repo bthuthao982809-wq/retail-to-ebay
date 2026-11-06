@@ -11,6 +11,11 @@ cfg.update(r2_secret_access_key="", r2_access_key_id="", r2_account_id="", r2_bu
            image_host="auto",   # máy mới chưa có key ImgBB / R2 -> up ảnh lên freeimage.host
            export_dir="", ebay_client_id="", ebay_client_secret="", gemini_api_key="", proxies_enc="")
 cfg.pop("proxy_file", None)   # máy mới: tool tự tìm Proxy.txt cạnh tool / trên Desktop (để "" = đã xoá hết proxy)
+# Proxy riêng từng site cũng thuộc máy đóng gói, không được đưa sang máy khác.
+for settings in (cfg.get("sites") or {}).values():
+    if isinstance(settings, dict):
+        settings.pop("proxies_enc", None)
+        settings.pop("proxy_file", None)
 (root / "build").mkdir(exist_ok=True)
 (root / "build" / "config.default.json").write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 print("build/config.default.json ok")

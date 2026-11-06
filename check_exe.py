@@ -35,6 +35,10 @@ if missing:
 cfg = json.loads(read("config.default.json") or b"{}")
 leaked = [k for k in ("ebay_client_id", "ebay_client_secret", "gemini_api_key", "proxies_enc", "proxy_file",
                       "r2_access_key_id", "r2_secret_access_key", "imgbb_api_key") if cfg.get(k)]
+# Không chỉ kiểm proxy chung: từng site có thể có danh sách mã hoá / file riêng.
+for site, settings in (cfg.get("sites") or {}).items():
+    if isinstance(settings, dict):
+        leaked.extend(f"sites.{site}.{key}" for key in ("proxies_enc", "proxy_file") if settings.get(key))
 if not cfg:
     problems.append("khong co config.default.json")
 if leaked:
@@ -43,6 +47,8 @@ if not read("web/index.html") or not read("web/fonts/inter-latin.woff2"):
     problems.append("thieu giao dien / font")
 if not read("web/bestbuy_capture.js") or "camoufox.sync_api" not in pyz.toc:
     problems.append("thieu Camoufox / script doc Best Buy")
+if "sites.prana_browser" not in pyz.toc:
+    problems.append("thieu bo doc Camoufox prAna")
 if target.is_dir():
     secret = [p.name for p in internal.rglob("*") if p.name in ("private.key", "keygen.py", "config.json", "da_cap.csv")]
     if secret:

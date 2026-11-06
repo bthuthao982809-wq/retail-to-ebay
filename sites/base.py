@@ -35,14 +35,49 @@ import re
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 class SkipProduct(Exception):
     """Link này bỏ qua (lý do trong message), các link khác chạy tiếp."""
 
 
+class SiteUnavailable(SkipProduct):
+    """Hết đường truy cập: thoát cả sản phẩm thay vì thử lại từng màu/size."""
+
+
+class SiteWaiting(SiteUnavailable):
+    """Phiên đang chờ xác minh hoặc thử lại, chưa kết luận lỗi sản phẩm."""
+
+    def __init__(self, message, retry_after=0, until=None):
+        super().__init__(message)
+        self.retry_after = max(0.0, float(retry_after))
+        self.until = float(until) if until is not None else time.time() + self.retry_after
+
+
 class Blocked(Exception):
     """Site chặn (403 / trang xác minh) — đổi proxy rồi thử lại."""
+
+
+class BotBlocked(Blocked):
+    """Trang chặn của hệ chống bot PerimeterX (HUMAN): chấm điểm theo kiểu request, đổi IP gần như không giúp."""
+
+
+# host -> giờ (time.time()) hết nghỉ sau khi gặp PerimeterX; giữ trong tiến trình để "Chạy lại" liền tay không gửi thêm
+BOT_COOLDOWN = {}
+BOT_COOLDOWN_SECONDS = 30 * 60
+BOT_MAX_ROUTES = 2   # gặp PerimeterX ở 2 đường (IP gốc / proxy) liền nhau -> dừng, không đốt hết proxy
+PX_MARKERS = ('"appId":"PX', "px-captcha", "captcha.px-cdn.net", "/px/captcha", "_pxCaptcha")
+
+
+def is_bot_block(text):
+    head = (text or "")[:20000]
+    return any(m in head for m in PX_MARKERS)
+
+
+def bot_cooldown_left(host):
+    """Số giây còn phải nghỉ với host (0 = được gửi)."""
+    return max(0.0, BOT_COOLDOWN.get(host, 0) - time.time())
 
 
 class ServerError(Exception):
@@ -59,7 +94,7 @@ BLOCK_MARKERS = (
     "Just a moment...",                       # Cloudflare
     "awsWafCookieDomainList",                 # AWS WAF
     "The request could not be satisfied",     # CloudFront chặn vùng
-)
+) + PX_MARKERS
 
 
 def is_blocked(text):
@@ -107,30 +142,54 @@ class ProxyPool:
         self.i = 0
         self.lock = threading.Lock()
         self.cooldown = {}   # dải mạng (2 số đầu IP) -> thời điểm được dùng lại
+        self.blocked_servers = {}   # prAna: chỉ tạm nghỉ đúng địa chỉ proxy trả về 403/429
 
     def current(self):
         with self.lock:
             return self.proxies[self.i % len(self.proxies)] if self.proxies else None
 
-    def rotate(self, blocked=False):
+    def _available(self, proxy, now, exclude=()):
+        return (proxy["server"] not in exclude
+                and self.cooldown.get(self._subnet(proxy), 0) <= now
+                and self.blocked_servers.get(proxy["server"], 0) <= now)
+
+    def select_ready(self, exclude=()):
+        """Chọn proxy sẵn dùng, ưu tiên địa chỉ hiện tại; prAna bỏ các địa chỉ đã thử trong request."""
+        with self.lock:
+            now = time.time()
+            for offset in range(len(self.proxies)):
+                j = (self.i + offset) % len(self.proxies)
+                if self._available(self.proxies[j], now, exclude):
+                    self.i = j
+                    return self.current_unlocked()
+            return None
+
+    def rotate(self, blocked=False, individual=False, exclude=()):
         """Sang proxy kế tiếp. blocked=True: proxy hiện tại vừa bị site chặn -> tránh cả dải mạng đó một lúc, vì site
-        thường chặn nguyên dải (29/10: 5 proxy 161.77.x.x liền nhau đều bị Best Buy ngắt ngay, chưa đọc được link nào)."""
+        thường chặn nguyên dải (29/10: 5 proxy 161.77.x.x liền nhau đều bị Best Buy ngắt ngay, chưa đọc được link nào).
+        individual=True chỉ nghỉ đúng địa chỉ vừa bị chặn (prAna). exclude bỏ các địa chỉ đã thử trong request."""
         with self.lock:
             n = len(self.proxies)
             if not n:
                 return None
             now = time.time()
             if blocked:
-                self.cooldown[self._subnet(self.proxies[self.i % n])] = now + self.SUBNET_COOLDOWN
+                current = self.proxies[self.i % n]
+                if individual:
+                    self.blocked_servers[current["server"]] = now + self.SUBNET_COOLDOWN
+                else:
+                    self.cooldown[self._subnet(current)] = now + self.SUBNET_COOLDOWN
             for step in range(1, n + 1):
                 j = (self.i + step) % n
-                if self.cooldown.get(self._subnet(self.proxies[j]), 0) <= now:
+                if self._available(self.proxies[j], now, exclude):
                     self.i = j
                     return self.current_unlocked()
+            if individual or exclude:
+                return None
             self.i = (self.i + 1) % n   # dải nào cũng vừa bị chặn: đành lấy proxy kế tiếp
             return self.current_unlocked()
 
-    def drop_current(self):
+    def drop_current(self, exclude=()):
         """Proxy hỏng (từ chối kết nối): bỏ khỏi lần chạy này. Trả về proxy kế tiếp, None nếu hết proxy."""
         with self.lock:
             if not self.proxies:
@@ -138,8 +197,19 @@ class ProxyPool:
             self.proxies.pop(self.i % len(self.proxies))
             if not self.proxies:
                 return None
-            self.i %= len(self.proxies)
-            return self.current_unlocked()
+            now = time.time()
+            for offset in range(len(self.proxies)):
+                j = (self.i + offset) % len(self.proxies)
+                if self._available(self.proxies[j], now, exclude):
+                    self.i = j
+                    return self.current_unlocked()
+            return None
+
+    def has_ready(self, exclude=()):
+        """Còn proxy nào ngoài thời gian tạm nghỉ hay không."""
+        with self.lock:
+            now = time.time()
+            return any(self._available(p, now, exclude) for p in self.proxies)
 
     @staticmethod
     def _subnet(p):
@@ -161,7 +231,8 @@ class Fetcher:
     page_factory: Chrome thật (Playwright) cho site cần qua bước chống bot (vd Touch of Class).
     """
 
-    def __init__(self, use_proxy=False, pool=None, page_factory=None, log=None, should_stop=None, tries=4):
+    def __init__(self, use_proxy=False, pool=None, page_factory=None, log=None, should_stop=None, tries=4,
+                 fail_fast=False, min_gap=0.0):
         self.use_proxy = use_proxy           # True = luôn đi qua proxy ngay từ đầu; False = IP gốc, bị chặn tự chuyển
         self.switched = False                # đã tự chuyển sang proxy trong lần chạy này
         self.pool = pool or ProxyPool([])
@@ -169,7 +240,11 @@ class Fetcher:
         self.log = log or (lambda *a, **k: None)
         self.should_stop = should_stop or (lambda: False)
         self.tries = tries
+        self.fail_fast = fail_fast          # chỉ bật cho prAna: bỏ proxy lỗi mạng, thoát khi hết đường truy cập
         self._switch_lock = threading.Lock()   # nhiều luồng cùng bị chặn -> chỉ chuyển (và báo) 1 lần
+        self.min_gap = min_gap              # giây tối thiểu giữa 2 request (prAna: tránh dồn request trong 1 link)
+        self._gap_lock = threading.Lock()
+        self._last_request = 0.0
         self.ip_stats = {}   # IP -> {"ok": số link đọc được, "blocked": số lần bị chặn} (log cuối lần chạy)
 
     @property
@@ -216,26 +291,62 @@ class Fetcher:
         u = proxy_url(self.pool.current())
         return {"http": u, "https": u} if u else None
 
+    def _wait_gap(self):
+        if self.min_gap <= 0:
+            return
+        with self._gap_lock:
+            wait = self._last_request + self.min_gap - time.monotonic()
+            if wait > 0:
+                deadline = time.monotonic() + wait
+                while time.monotonic() < deadline:
+                    if self.should_stop():
+                        raise SkipProduct("Đã dừng")
+                    time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+            self._last_request = time.monotonic()
+
+    def _bot_stop(self, host):
+        left = bot_cooldown_left(host)
+        until = time.strftime("%H:%M", time.localtime(time.time() + left))
+        return SiteUnavailable(f"{host} đang chặn bot (PerimeterX) — tool tạm nghỉ, chạy lại sau {until} "
+                               f"(đổi proxy lúc này chỉ làm bị chặn lâu hơn)")
+
     def get(self, url, headers=None, allow_404=False):
         from curl_cffi import requests
 
+        host = urlparse(url).netloc
+        if self.fail_fast and bot_cooldown_left(host):
+            raise self._bot_stop(host)
+        bot_hits = 0
         last = None
         attempt, tries = 0, self.tries
+        attempted_servers = set()
+        if self.fail_fast and self.proxy_on:
+            tries = max(1, len(self.pool.proxies))
         while attempt < tries:
             attempt += 1
             # Có proxy: thử nhiều proxy hơn (vài proxy liền nhau có thể cùng bị site chặn)
-            tries = max(self.tries, min(8, len(self.pool.proxies))) if self.proxy_on else self.tries
+            if not self.fail_fast:
+                tries = max(self.tries, min(8, len(self.pool.proxies))) if self.proxy_on else self.tries
             if self.should_stop():
                 raise SkipProduct("Đã dừng")
+            if self.fail_fast and self.proxy_on:
+                route = self.pool.select_ready(exclude=attempted_servers)
+                if route is None:
+                    raise SiteUnavailable("prAna: không còn proxy khả dụng — các proxy lỗi kết nối hoặc đang bị chặn")
+                attempted_servers.add(route["server"])
             try:
                 h = {"Accept-Language": "en-US,en;q=0.9"}
                 h.update(headers or {})
-                r = requests.get(url, impersonate="chrome", timeout=60, proxies=self._proxies(), headers=h)
+                timeout = (8, 25) if self.fail_fast else 60
+                self._wait_gap()
+                r = requests.get(url, impersonate="chrome", timeout=timeout, proxies=self._proxies(), headers=h)
                 if r.status_code == 404 and allow_404:
                     return None
                 if r.status_code == 404:
                     raise SkipProduct("Sản phẩm không còn trên site (404)")
                 if r.status_code in (403, 429) or is_blocked(r.text):
+                    if is_bot_block(r.text):
+                        raise BotBlocked(f"HTTP {r.status_code} PerimeterX")
                     raise Blocked(f"HTTP {r.status_code}")
                 if r.status_code >= 500:
                     raise ServerError(f"HTTP {r.status_code}")
@@ -244,19 +355,47 @@ class Fetcher:
                 raise
             except Exception as e:
                 last = e
+                if self.fail_fast and self.should_stop():
+                    raise SkipProduct("Đã dừng") from e
+                if self.fail_fast and isinstance(e, BotBlocked):
+                    bot_hits += 1
+                    self.note_ip("blocked")
+                    if bot_hits >= BOT_MAX_ROUTES or not self.pool.proxies:
+                        BOT_COOLDOWN[host] = time.time() + BOT_COOLDOWN_SECONDS
+                        raise self._bot_stop(host) from e
                 if isinstance(e, Blocked) and not self.proxy_on:
                     # IP gốc bị chặn -> chuyển ngay sang proxy, thử lại từ đầu
                     if self.switch_to_proxy(str(e)):
                         attempt = 0
+                        if self.fail_fast:
+                            tries = max(1, len(self.pool.proxies))
                         continue
                     if attempt >= 2:
                         break   # không có proxy: thử thêm chỉ làm site chặn lâu hơn
                 if self.proxy_on and self.pool.proxies:
-                    self.pool.rotate()
+                    if self.fail_fast and isinstance(e, (requests.exceptions.ConnectionError,
+                                                         requests.exceptions.ProxyError, requests.exceptions.Timeout)):
+                        failed_proxy = self.pool.label()
+                        next_proxy = self.pool.drop_current(exclude=attempted_servers)
+                        self.log(f"  ⚠ {type(e).__name__}: bỏ proxy {failed_proxy} khỏi lượt prAna do lỗi kết nối/timeout", "warn")
+                        if next_proxy is None:
+                            raise SiteUnavailable("prAna: không còn proxy khả dụng — các proxy lỗi kết nối hoặc đang bị chặn") from e
+                        self.log(f"  ⇄ chuyển sang proxy {self.pool.label()}")
+                        if self.should_stop():
+                            raise SkipProduct("Đã dừng")
+                        time.sleep(2)
+                        continue
+                    # prAna chỉ nghỉ đúng địa chỉ bị chặn; các site khác giữ cách xoay theo dải mạng.
+                    self.pool.rotate(blocked=isinstance(e, Blocked), individual=self.fail_fast,
+                                     exclude=attempted_servers if self.fail_fast else ())
+                    if self.fail_fast and not self.pool.has_ready(exclude=attempted_servers):
+                        break
                     self.log(f"  ⚠ {type(e).__name__}: {e} — đổi sang proxy {self.pool.label()}", "warn")
                 else:
                     self.log(f"  ⚠ {type(e).__name__}: {e} — thử lại", "warn")
-                time.sleep(2 + attempt * 2)
+                time.sleep(2 if self.fail_fast else 2 + attempt * 2)
+        if self.fail_fast and not isinstance(last, ServerError):
+            raise SiteUnavailable("prAna: đã hết lượt thử kết nối — dừng đọc sản phẩm để thử lại sau") from last
         if isinstance(last, ServerError):
             raise SkipProduct(f"Site báo lỗi ({last}) — link có thể sai hoặc sản phẩm đã gỡ; mở link kiểm tra lại")
         if isinstance(last, Blocked):

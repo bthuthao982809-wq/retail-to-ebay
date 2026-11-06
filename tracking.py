@@ -159,7 +159,8 @@ def _csv_index():
         if "revise" in str(f).lower() or "theo-doi" in str(f).lower():
             continue
         try:
-            rows = list(csv.reader(open(f, encoding="utf-8-sig")))
+            with open(f, encoding="utf-8-sig", newline="") as fh:   # đóng file ngay: Windows khoá file đang mở
+                rows = list(csv.reader(fh))
         except (OSError, UnicodeDecodeError):
             continue
         hi = next((i for i, r in enumerate(rows) if r and r[0].startswith("*Action")), None)
@@ -596,9 +597,17 @@ def check_listing(it, prod, cfg):
 ACTION = "*Action(SiteID=US|Country={country}|Currency=USD|Version=1193|CC=UTF-8)"
 
 
+def is_single(it):
+    """Listing 1 biến thể: dòng Revise ghi thẳng số lượng ở dòng cha (không có dòng Variation)."""
+    return len(it.get("variants") or []) == 1 and it["variants"][0]["vsku"] == it["sku"]
+
+
 def revise_plan(data):
-    """{Profile: [(listing, [biến thể hết hàng])]} + danh sách listing hết hàng nhưng chưa có Item ID."""
-    plan, no_id = {}, []
+    """{Profile: [(listing, [biến thể hết hàng])]} + listing hết hàng chưa có Item ID + listing không rõ RelationshipDetails.
+
+    Biến thể nhiều trục mà không biết RelationshipDetails (mốc lần kiểm tra đầu, không còn file CSV lúc list) thì không
+    ghi vào file: eBay không nhận dòng Variation thiếu ô này, và SKU biến thể của mốc chỉ là đoán."""
+    plan, no_id, no_rd = {}, [], []
     for it in data["items"].values():
         chk = (it.get("check") or {}).get("vars") or {}
         oos = [v for v in it.get("variants", []) if chk.get(v["vsku"], {}).get("state") == "oos"]
@@ -607,14 +616,21 @@ def revise_plan(data):
         if not it.get("item_id"):
             no_id.append(it["sku"])
             continue
+        if not is_single(it):
+            if any(not v.get("rd") for v in oos):
+                no_rd.append(it["sku"])
+            oos = [v for v in oos if v.get("rd")]
+            if not oos:
+                continue
         plan.setdefault((it.get("profile", ""), it.get("country") or "US"), []).append((it, oos))
-    return plan, no_id
+    return plan, no_id, no_rd
 
 
 def write_revise(folder):
-    """Mỗi Profile 1 file. Ghi xong: các biến thể đó coi như số lượng 0 (lần kiểm tra sau có hàng lại sẽ báo)."""
+    """Mỗi Profile 1 file. Ghi xong: các biến thể đó coi như số lượng 0 (lần kiểm tra sau có hàng lại sẽ báo).
+    Trả về (file, listing chưa có Item ID, số biến thể đã ghi, listing không rõ RelationshipDetails)."""
     data = load()
-    plan, no_id = revise_plan(data)
+    plan, no_id, no_rd = revise_plan(data)
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%m%d-%H%M")
@@ -627,24 +643,24 @@ def write_revise(folder):
             w.writerow([ACTION.format(country=country), "ItemID", "CustomLabel", "Relationship", "RelationshipDetails",
                         "*Quantity"])
             for it, oos in lst:
-                single = len(it["variants"]) == 1 and it["variants"][0]["vsku"] == it["sku"]
-                if single:
+                if is_single(it):
                     w.writerow(["Revise", it["item_id"], it["sku"], "", "", "0"])
                 else:
                     w.writerow(["Revise", it["item_id"], it["sku"], "", "", ""])
                     for v in oos:
                         w.writerow(["", "", v["vsku"], "Variation", v["rd"], "0"])
-                done.update(v["vsku"] for v in oos)
+                # theo listing + SKU biến thể: 2 listing trùng SKU biến thể không làm listing kia về 0
+                done.update((it["sku"], v["vsku"]) for v in oos)
         files.append(path)
 
     def fn(d):
         for it in d["items"].values():
             for v in it.get("variants", []):
-                if v["vsku"] in done:
+                if (it["sku"], v["vsku"]) in done:
                     v["qty"] = 0
                     st = ((it.get("check") or {}).get("vars") or {}).get(v["vsku"])
                     if st:
                         st["state"] = "same"
                         st["revised"] = _now()
     update(fn)
-    return files, no_id, len(done)
+    return files, no_id, len(done), no_rd

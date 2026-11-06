@@ -499,6 +499,10 @@
   .bulk { border-radius: 12px; background: #fbfcfe; padding: 8px 12px; border-color: var(--border); }
   .bulk input { border-radius: 8px; }
   .bulk button { border-radius: 8px; }
+  .brand-tools { position: relative; margin-left: auto; }
+  .brand-tools summary { cursor: pointer; font-size: 11px; color: var(--muted); padding: 5px 8px; list-style: none; border: 1px solid var(--border); border-radius: 6px; }
+  .brand-tools > div { position: absolute; right: 0; top: 100%; z-index: 20; background: white; padding: 5px; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px #0002; min-width: 155px; }
+  .brand-tools button { display: block; width: 100%; text-align: left; border: 0; font-size: 12px; }
   #aiBtn { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
 
   /* ---- bảng kết quả */
@@ -681,6 +685,7 @@
           <input type="number" id="sitePct" min="50" max="500" step="1"> % giá site</label>
         <label class="switch" title="Tải ảnh sản phẩm về, chỉnh chuẩn eBay rồi up lên host ảnh"><input type="checkbox" id="upload"><span></span> Up ảnh lên <b id="hostName">freeimage.host</b></label>
         <label class="switch" title="Mặc định tắt: chạy IP gốc, bị chặn thì tự chuyển sang proxy. Bật = đi qua proxy ngay từ đầu"><input type="checkbox" id="useProxy"><span></span> Luôn đi qua proxy</label>
+        <label class="switch" id="brandInTitleBox"><input type="checkbox" id="brandInTitle"><span></span> Tên hãng ở đầu tiêu đề</label>
         <span class="pxinfo" id="pxInfo"></span>
       </div>
     </header>
@@ -705,6 +710,7 @@
         <button id="makeTemplate" class="ghost">📋 File Excel mẫu</button>
       </div>
       <div id="busyBanner" class="banner" hidden></div>
+      <div id="waitBanner" class="banner" role="status" hidden></div>
     </section>
 
     <section class="card">
@@ -724,6 +730,10 @@
         <span class="sep"></span>
         <button id="aiBtn" title="Sửa tiêu đề các dòng đã chọn; không chọn thì chỉ sửa tiêu đề đang cảnh báo">✨ Sửa tiêu đề AI</button>
         <button id="aiRestore" title="Bỏ tiêu đề AI đã viết, quay lại tiêu đề trước khi dùng AI — cho dòng đã tích (không tích = tất cả)">↺ Tiêu đề trước khi dùng AI</button>
+        <details class="brand-tools" id="titleBrandMenu"><summary title="Thêm/bỏ tên hãng cho dòng đã chọn; không chọn = toàn bộ danh sách">Hãng ▾</summary><div>
+          <button id="titleBrandAdd">+ Thêm hãng ở đầu</button>
+          <button id="titleBrandRemove">− Bỏ hãng ở đầu</button>
+        </div></details>
       </div>
       <div class="table-wrap">
         <table class="results">
@@ -1125,9 +1135,9 @@ function showRetryMenu(e, r) {
   items.push(copyBtn);
   let button = null;
   if (r.status === "error") {
-    const busy = lastStatus?.running || lastStatus?.busy_other || lastStatus?.ai_running;
+    const busy = lastStatus?.running || lastStatus?.busy_other || lastStatus?.ai_running || lastStatus?.wait?.active;
     button = el("button", { textContent: "↻ Thử lại link này", disabled: !!busy,
-      title: busy ? "Chờ tác vụ đang chạy hoàn tất" : "Chỉ chạy lại dòng lỗi này" });
+      title: lastStatus?.wait?.active ? lastStatus.wait.reason : busy ? "Chờ tác vụ đang chạy hoàn tất" : "Chỉ chạy lại dòng lỗi này" });
     items.push(button);
   }
   retryMenu = el("div", { role: "menu" }, ...items);
@@ -1189,7 +1199,19 @@ function applyTabUI() {
   $("#links").placeholder = (s.examples || []).join("\n") + "\nMỗi dòng 1 link — Profile và Action Country điền trong bảng Kết quả sau khi chạy, hoặc Import file có sẵn cột Profile";
   $("#makeTemplate").title = "Tạo file Excel mẫu (cột Profile, Action Country, Link sản phẩm, Site — Site chọn trong danh sách xổ xuống, luôn cập nhật đủ site mới) và mở bằng Excel";
   $("#useProxy").checked = !!cfg.sites[tab]?.use_proxy;
+  syncBrandSwitch();
   syncProxyInfo();
+}
+
+// Nút "Tên hãng ở đầu tiêu đề" của site đang mở: ô chung trong Cài đặt tắt thì mọi site tắt (nút bị khoá)
+const siteBrandOn = (key) => cfg.brand_in_title !== false && cfg.sites?.[key]?.brand_in_title !== false;
+function syncBrandSwitch() {
+  const all = cfg.brand_in_title !== false;
+  $("#brandInTitle").checked = siteBrandOn(tab);
+  $("#brandInTitle").disabled = !all;
+  $("#brandInTitleBox").title = all
+    ? "Bật = tiêu đề có tên hãng ở đầu (riêng site đang mở). Áp dụng cho lần chạy sau — dòng đã có trong bảng giữ nguyên"
+    : "Đang tắt cho mọi site ở Cài đặt → \"Tên hãng ở đầu tiêu đề\" — bật lại ở đó trước";
 }
 
 // Dòng tóm tắt dưới tên site: % giá, proxy, Category tự động, AI tiêu đề
@@ -1202,7 +1224,8 @@ function renderPageSub() {
   const bits = [["SKU", `${sc.prefix || ""}…`],
     ["Category", !(cfg.ebay_client_id && cfg.ebay_client_secret_set) ? "chưa có eBay API — gõ tay"
       : cfg.auto_category ? "eBay tự gợi ý" : "gõ tay"],
-    ["Tiêu đề", cfg.ai_titles && cfg.gemini_api_key_set ? "AI tự viết" : "theo site"]];
+    ["Tiêu đề", (cfg.ai_titles && cfg.gemini_api_key_set ? "AI tự viết" : "theo site")
+      + (siteBrandOn(tab) ? "" : ", không tên hãng")]];
   $("#pageSub").replaceChildren(...bits.flatMap(([k, v], i) => [i ? " · " : "", `${k}: `, el("b", { textContent: v })]),
     " · ", Object.assign(el("a", { href: "#", textContent: "đổi" }), { onclick: (e) => { e.preventDefault(); openSettings(); } }));
 }
@@ -1253,6 +1276,7 @@ async function refreshCfg() {
     if (editing()) return;   // vừa mở Cài đặt / bấm vào ô % trong lúc chờ -> không đè
     cfg = fresh;
     $("#useProxy").checked = !!cfg.sites?.[tab]?.use_proxy;
+    syncBrandSwitch();
     renderPageSub();
     syncProxyInfo();
     renderSettings();   // form Cài đặt (đang đóng) cũng theo bản mới, lần lưu ngầm sau không ghi đè bằng số cũ
@@ -1509,6 +1533,24 @@ async function aiTitles(restore) {
     $("#logCard").open = true;
     lastSig = "";
     poll();
+  } catch (e) { alert(e.message); }
+}
+async function applyTitleBrand(action) {
+  $("#titleBrandMenu").open = false;
+  syncSelection();
+  const tabAtStart = tab;
+  const ids = selected.size ? [...selected] : okResults().map((r) => r.id);
+  if (!ids.length) return alert("Chưa có dòng thành công để sửa tên hãng.");
+  const verb = action === "add" ? "Thêm" : "Bỏ";
+  if (!(await uiConfirm(`${verb} tên hãng ở đầu tiêu đề cho ${ids.length} dòng${selected.size ? " đã chọn" : " trong danh sách"}?\n\nTiêu đề vượt 80 ký tự sẽ được cảnh báo để sửa bằng AI.`, verb + " hãng"))) return;
+  if (tab !== tabAtStart) return;
+  const titles = Object.fromEntries(ids.filter((id) => edits[id] !== undefined).map((id) => [id, edits[id]]));
+  try {
+    const result = await api("/api/title-brand", { action, ids, titles });
+    result.ids.forEach((id) => delete edits[id]);
+    lastSig = "";
+    await poll();
+    alert(`Đã đổi ${result.changed} tiêu đề.${result.skipped ? ` Bỏ qua ${result.skipped} dòng không có hãng/tên phù hợp.` : ""}${result.over ? `\n⚠ ${result.over} tiêu đề vượt 80 ký tự — bấm Sửa tiêu đề AI để sửa.` : ""}`);
   } catch (e) { alert(e.message); }
 }
 // ---------- proxy: chỉ hiện ip:port, user/pass không bao giờ gửi ra giao diện
@@ -2222,9 +2264,14 @@ async function poll() {
   $("#progressText").textContent = total ? `${done}/${total}` : "";
   // Chạy xong link nhưng tab còn bận (kiểm ảnh, AI, ghi CSV): nói rõ đang làm gì, vì sao nút Sửa AI / Chạy lại chưa bấm được
   const phase = s.phase || (s.ai_running ? "AI đang viết tiêu đề" : "");
+  const waiting = !!s.wait?.active;
+  const waitSeconds = waiting && s.wait.until ? Math.max(0, Math.ceil(s.wait.until - Date.now() / 1000)) : 0;
+  const waitCountdown = waitSeconds ? ` · Thử lại sau ${Math.floor(waitSeconds / 60)}:${String(waitSeconds % 60).padStart(2, "0")}` : "";
+  $("#waitBanner").hidden = !waiting;
+  $("#waitBanner").textContent = waiting ? s.wait.reason + waitCountdown : "";
   $("#phaseText").hidden = !phase;
-  $("#phaseText").textContent = phase ? `${phase}… — xong mới sửa AI / chạy lại được` : "";
-  $("#run").disabled = s.running;
+  $("#phaseText").textContent = phase ? (waiting ? phase : `${phase}… — xong mới sửa AI / chạy lại được`) : "";
+  $("#run").disabled = s.running || waiting;
   $("#busyBanner").hidden = !s.busy_other;
   $("#busyBanner").textContent = s.busy_other ? `Tab ${s.busy_other} đang chạy — chờ xong mới chạy được tab này (vẫn xem và sửa kết quả được).` : "";
   document.querySelectorAll("#tabs button").forEach((b) => {
@@ -2239,11 +2286,12 @@ async function poll() {
   const nErr = s.results.filter((r) => r.status === "error").length - nPending;
   $("#resumeBtn").hidden = !nPending || s.running;
   $("#resumeBtn").textContent = `▶ Chạy tiếp ${nPending} link`;
-  $("#resumeBtn").disabled = !!s.busy_other || s.ai_running;
+  $("#resumeBtn").disabled = !!s.busy_other || s.ai_running || waiting;
   $("#retryBtn").hidden = !nErr || s.running;
   $("#retryBtn").textContent = `↻ Chạy lại ${nErr} dòng lỗi`;
-  $("#retryBtn").disabled = !!s.busy_other || s.ai_running;
+  $("#retryBtn").disabled = !!s.busy_other || s.ai_running || waiting;
   $("#aiBtn").disabled = s.running || s.ai_running;
+  $("#titleBrandAdd").disabled = $("#titleBrandRemove").disabled = s.running || s.ai_running;
   $("#aiBtn").dataset.busy = String(!!s.ai_running);
   updateAiTitleButton();
   updateExportState();
@@ -3036,9 +3084,10 @@ async function tkRun(skus, resume = false) {
   $("#tkRevise").onclick = async () => {
     try {
       const r = await api("/api/track/revise", {});
-      alert(r.files.length ? `Đã xuất ${r.files.length} file Revise (${r.variants} size → số lượng 0) vào\n${r.folder}\n\n• ` + r.files.join("\n• ")
+      const noRd = (r.no_rd || []).length ? `\n\n${r.no_rd.length} listing có size hết hàng nhưng tool không còn file CSV lúc list (không biết đúng biến thể trên eBay) — chưa ghi vào file, sửa số lượng trên eBay hoặc nạp file CSV đã xuất của listing đó: ${r.no_rd.slice(0, 8).join(", ")}${r.no_rd.length > 8 ? " ..." : ""}` : "";
+      alert((r.files.length ? `Đã xuất ${r.files.length} file Revise (${r.variants} size → số lượng 0) vào\n${r.folder}\n\n• ` + r.files.join("\n• ")
         + (r.no_id.length ? `\n\n${r.no_id.length} listing chưa có Item ID nên chưa có trong file (nạp file kết quả upload eBay rồi xuất lại).` : "")
-        : r.no_id.length ? `${r.no_id.length} listing có size hết hàng nhưng chưa có Item ID — nạp file kết quả upload eBay trước.` : "Không có size nào cần đưa về 0.");
+        : r.no_id.length ? `${r.no_id.length} listing có size hết hàng nhưng chưa có Item ID — nạp file kết quả upload eBay trước.` : noRd ? "Chưa ghi được file Revise nào." : "Không có size nào cần đưa về 0.") + noRd);
       tkMtime = -1; tkPoll();
     } catch (e) { alert(e.message); }
   };
@@ -3070,6 +3119,12 @@ async function tkRun(skus, resume = false) {
     const on = $("#useProxy").checked;
     try { cfg = await api("/api/config", { sites: { [tab]: { use_proxy: on } } }); syncProxyInfo(); renderTabs(); }
     catch (e) { alert(e.message); }
+  };
+  $("#brandInTitle").onchange = async () => {
+    // Chỉ đổi site đang mở; lần chạy sau mới có / mất tên hãng ở đầu tiêu đề
+    const on = $("#brandInTitle").checked;
+    try { cfg = await api("/api/config", { sites: { [tab]: { brand_in_title: on } } }); syncBrandSwitch(); renderPageSub(); }
+    catch (e) { alert(e.message); syncBrandSwitch(); }
   };
   // % giá của site đang mở: sửa ở đầu trang -> lưu vào ô "% giá" của site đó, bảng Kết quả tính lại giá
   $("#sitePct").onchange = async () => {
@@ -3129,6 +3184,8 @@ async function tkRun(skus, resume = false) {
   $("#aiPromptReset").onclick = () => { $("#ai_prompt").value = cfg.ai_prompt_default || ""; syncPromptState(); };
   $("#aiBtn").onclick = () => aiTitles(false);
   $("#aiRestore").onclick = () => aiTitles(true);
+  $("#titleBrandAdd").onclick = () => applyTitleBrand("add");
+  $("#titleBrandRemove").onclick = () => applyTitleBrand("remove");
   $("#pvClose").onclick = closePreview;
   $("#pvSpecSave").onclick = saveSpecs;
   $("#vsSave").onclick = saveVariants;
