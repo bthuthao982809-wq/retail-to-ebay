@@ -192,9 +192,11 @@ class PranaRulesTests(unittest.TestCase):
         f.base["primaryCategoryID"] = "women-tops-sweaters"
         f.base["productPitch"] = "A comfortable sweater."
         prod = prana.scrape(f, NUMERIC_URL)
-        self.assertEqual({r["dimension"] for r in f.requests if "dimension" in r}, {"30", "32", "34"})
-        self.assertIn("0 30", {v["size"] for v in prod["variants"]})
-        self.assertIn("18 34", {v["size"] for v in prod["variants"]})
+        # không áp quy tắc quần (size 2–16, 32/31); chiều dài vẫn chốt 1 giá trị (không có 8 -> giá trị đầu)
+        self.assertEqual({r["dimension"] for r in f.requests if "dimension" in r}, {"30"})
+        self.assertIn("0", {v["size"] for v in prod["variants"]})
+        self.assertIn("18", {v["size"] for v in prod["variants"]})
+        self.assertEqual(prod["details"]["Inseam"], "30 in")
 
     def test_shared_sfra_without_policy_keeps_all_dimensions_and_labels(self):
         f = RetailerFixture()

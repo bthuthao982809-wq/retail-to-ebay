@@ -243,8 +243,13 @@ class PranaProxyRecoveryTests(unittest.TestCase):
         engine = app.Engine.__new__(app.Engine)
         for site in ("prana", "hollister", "eileenfisher", "bestbuy"):
             session = SimpleNamespace(kind=site, pool=base.ProxyPool([]), browser=None, stop=threading.Event())
-            with self.subTest(site=site), patch.object(app, "Fetcher") as factory:
-                engine._fetcher(session, {"sites": {site: {"use_proxy": False}}})
+            with self.subTest(site=site), patch.object(app, "Fetcher") as http_factory, \
+                    patch.object(app, "PranaBrowserFetcher") as browser_factory:
+                actual = engine._fetcher(session, {"sites": {site: {"use_proxy": False}}})
+                factory = browser_factory if site == "prana" else http_factory
+                unused = http_factory if site == "prana" else browser_factory
+                self.assertIs(actual, factory.return_value)
+                unused.assert_not_called()
                 self.assertEqual(bool(factory.call_args.kwargs.get("fail_fast")), site == "prana")
 
     def test_site_unavailable_escapes_color_loop_in_shared_sfra(self):
@@ -288,17 +293,19 @@ class PranaProxyRecoveryTests(unittest.TestCase):
              patch.object(core, "proxies_for", return_value=copy.deepcopy(PROXIES)), \
              patch.object(core, "site_proxy_lines", return_value=[]), \
              patch.object(core, "site_delay", return_value=0), \
-             patch.object(app, "Fetcher", return_value=object()) as factory, \
+             patch.object(app, "Fetcher", return_value=object()) as http_factory, \
+             patch.object(app, "PranaBrowserFetcher") as browser_factory, \
              patch.object(tracking, "load", return_value=data), \
              patch.object(tracking, "update", side_effect=lambda fn: fn(data)), \
              patch.object(tracking, "run_left", return_value=[]), \
              patch.object(tracking, "run_clear"):
             engine._track_run(list(data["items"]), Mock())
-        calls = factory.call_args_list
-        self.assertEqual(len(calls), 2)
-        self.assertTrue(calls[0].kwargs.get("fail_fast"))
-        self.assertFalse(calls[1].kwargs.get("fail_fast", False))
-        self.assertIsNot(calls[0].kwargs["pool"], calls[1].kwargs["pool"])
+        browser_factory.assert_called_once()
+        http_factory.assert_called_once()
+        self.assertTrue(browser_factory.call_args.kwargs.get("fail_fast"))
+        self.assertFalse(http_factory.call_args.kwargs.get("fail_fast", False))
+        self.assertIsNot(browser_factory.call_args.kwargs["pool"], http_factory.call_args.kwargs["pool"])
+        browser_factory.return_value.prepare_product.assert_called_once_with("https://www.prana.com/product")
 
     def test_run_stops_on_network_exhaustion_and_keeps_all_remaining_rows_pending(self):
         engine = app.Engine.__new__(app.Engine)

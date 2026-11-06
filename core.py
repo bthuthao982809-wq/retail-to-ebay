@@ -53,7 +53,7 @@ SITE_DEFAULTS = {
     "talbots":           {"prefix": "TB-",  "use_proxy": False, "delay": "8"},   # PerimeterX: đi chậm
     "personalcreations": {"prefix": "PC-",  "use_proxy": False},
     "tommybahama":       {"prefix": "TBH-", "use_proxy": False},
-    "prana":             {"prefix": "PRA-", "use_proxy": False, "delay": "4"},
+    "prana":             {"prefix": "PRA-", "use_proxy": False, "delay": "15"},
     "sonos":             {"prefix": "SON-", "use_proxy": False},
     "hollister":         {"prefix": "HOL-", "use_proxy": False},
     "fanatics":          {"prefix": "FAN-", "use_proxy": False},   # IP Việt Nam bị chặn -> tự chuyển proxy

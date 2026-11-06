@@ -64,11 +64,12 @@ class PranaTrackingTests(unittest.TestCase):
         engine.sessions = {"prana": app.Session(mod)}
         engine.track = {"progress": [0, len(entries)], "logs": [], "stop": threading.Event(), "current": ""}
         data = {"items": {e["sku"]: copy.deepcopy(e) for e in entries}}
-        fetcher = object()
+        fetcher = SimpleNamespace(prepare_product=Mock())
         with patch.object(core, "load_config", return_value=CFG), \
              patch.object(core, "proxies_for", return_value=[]), \
              patch.object(core, "site_proxy_file", return_value=None), \
              patch.object(app, "Fetcher", return_value=fetcher), \
+             patch.object(app, "PranaBrowserFetcher", return_value=fetcher), \
              patch.object(tracking, "load", return_value=data), \
              patch.object(tracking, "update", side_effect=lambda fn: fn(data)), \
              patch.object(tracking, "run_left", return_value=[]), \
@@ -86,6 +87,7 @@ class PranaTrackingTests(unittest.TestCase):
         data, fetcher = self.run_tracking(mod, [legacy, new])
         mod.scrape.assert_not_called()
         mod.scrape_for_tracking.assert_called_once_with(fetcher, URL)
+        fetcher.prepare_product.assert_called_once_with(URL)
         for entry in data["items"].values():
             self.assertEqual(entry["check"]["error"], "")
             checks = entry["check"]["vars"]

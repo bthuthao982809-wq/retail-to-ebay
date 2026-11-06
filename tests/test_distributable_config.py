@@ -51,7 +51,8 @@ class DistributableConfigTests(unittest.TestCase):
             for name in ("web/index.html", "web/fonts/inter-latin.woff2", "web/bestbuy_capture.js"):
                 (internal / name).write_bytes(b"fixture")
             (internal / "config.default.json").write_text(json.dumps(config), encoding="utf-8")
-            fake_pyz = SimpleNamespace(toc={**{f"sites.{name}": None for name in sites.ORDER}, "camoufox.sync_api": None})
+            fake_pyz = SimpleNamespace(toc={**{f"sites.{name}": None for name in sites.ORDER},
+                                            "sites.prana_browser": None, "camoufox.sync_api": None})
             fake_archive = SimpleNamespace(toc={"PYZ.pyz": None}, open_embedded_archive=lambda name: fake_pyz)
             output = io.StringIO()
             code = 0

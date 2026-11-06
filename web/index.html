@@ -710,6 +710,7 @@
         <button id="makeTemplate" class="ghost">📋 File Excel mẫu</button>
       </div>
       <div id="busyBanner" class="banner" hidden></div>
+      <div id="waitBanner" class="banner" role="status" hidden></div>
     </section>
 
     <section class="card">
@@ -1134,9 +1135,9 @@ function showRetryMenu(e, r) {
   items.push(copyBtn);
   let button = null;
   if (r.status === "error") {
-    const busy = lastStatus?.running || lastStatus?.busy_other || lastStatus?.ai_running;
+    const busy = lastStatus?.running || lastStatus?.busy_other || lastStatus?.ai_running || lastStatus?.wait?.active;
     button = el("button", { textContent: "↻ Thử lại link này", disabled: !!busy,
-      title: busy ? "Chờ tác vụ đang chạy hoàn tất" : "Chỉ chạy lại dòng lỗi này" });
+      title: lastStatus?.wait?.active ? lastStatus.wait.reason : busy ? "Chờ tác vụ đang chạy hoàn tất" : "Chỉ chạy lại dòng lỗi này" });
     items.push(button);
   }
   retryMenu = el("div", { role: "menu" }, ...items);
@@ -2263,9 +2264,14 @@ async function poll() {
   $("#progressText").textContent = total ? `${done}/${total}` : "";
   // Chạy xong link nhưng tab còn bận (kiểm ảnh, AI, ghi CSV): nói rõ đang làm gì, vì sao nút Sửa AI / Chạy lại chưa bấm được
   const phase = s.phase || (s.ai_running ? "AI đang viết tiêu đề" : "");
+  const waiting = !!s.wait?.active;
+  const waitSeconds = waiting && s.wait.until ? Math.max(0, Math.ceil(s.wait.until - Date.now() / 1000)) : 0;
+  const waitCountdown = waitSeconds ? ` · Thử lại sau ${Math.floor(waitSeconds / 60)}:${String(waitSeconds % 60).padStart(2, "0")}` : "";
+  $("#waitBanner").hidden = !waiting;
+  $("#waitBanner").textContent = waiting ? s.wait.reason + waitCountdown : "";
   $("#phaseText").hidden = !phase;
-  $("#phaseText").textContent = phase ? `${phase}… — xong mới sửa AI / chạy lại được` : "";
-  $("#run").disabled = s.running;
+  $("#phaseText").textContent = phase ? (waiting ? phase : `${phase}… — xong mới sửa AI / chạy lại được`) : "";
+  $("#run").disabled = s.running || waiting;
   $("#busyBanner").hidden = !s.busy_other;
   $("#busyBanner").textContent = s.busy_other ? `Tab ${s.busy_other} đang chạy — chờ xong mới chạy được tab này (vẫn xem và sửa kết quả được).` : "";
   document.querySelectorAll("#tabs button").forEach((b) => {
@@ -2280,10 +2286,10 @@ async function poll() {
   const nErr = s.results.filter((r) => r.status === "error").length - nPending;
   $("#resumeBtn").hidden = !nPending || s.running;
   $("#resumeBtn").textContent = `▶ Chạy tiếp ${nPending} link`;
-  $("#resumeBtn").disabled = !!s.busy_other || s.ai_running;
+  $("#resumeBtn").disabled = !!s.busy_other || s.ai_running || waiting;
   $("#retryBtn").hidden = !nErr || s.running;
   $("#retryBtn").textContent = `↻ Chạy lại ${nErr} dòng lỗi`;
-  $("#retryBtn").disabled = !!s.busy_other || s.ai_running;
+  $("#retryBtn").disabled = !!s.busy_other || s.ai_running || waiting;
   $("#aiBtn").disabled = s.running || s.ai_running;
   $("#titleBrandAdd").disabled = $("#titleBrandRemove").disabled = s.running || s.ai_running;
   $("#aiBtn").dataset.busy = String(!!s.ai_running);

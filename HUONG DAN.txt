@@ -13,8 +13,10 @@ mau 29/31/33 chi lay 31 inch (Regular). Uu tien 32 inch neu co ca 31 va 32.
 Size so quan nu chi lay 2-16; size chu va size vong eo giu nguyen. Chi tich san size con hang,
 khong tu doi sang chieu dai khac khi chieu dai da chon het hang. Size va Inseam duoc xuat rieng.
 Quy tac ap dung khi doc san pham moi; danh sach cu va du lieu Theo doi van duoc giu nguyen.
-prAna chong bot (PerimeterX): link co mau chi doc dung mau do (muon nhieu mau thi dan link khong co
-dwvar_..._color). Bi chan thi tool tu dung va nghi prAna 30 phut, khong doi het proxy.
+prAna mo Camoufox rieng va giu phien trong luot chay. Tool doc du cac mau de dung lai du lieu,
+van chon san mau theo link goc. Sau khi thu het IP san dung, tool cho nguoi dung xac minh Press & Hold
+toi da 5 phut va hien dem nguoc. Xac minh xong thi tu chay tiep. Het 5 phut thi dung luot prAna,
+giu cac dong chua xong de bam Chay tiep sau; khong tu bat dau lai 5 phut.
 
 0. CAI DAT
    - Giai nen ca file zip vao 1 thu muc rieng (vd D:\RetailToEbay), mo RetailToEbay.exe.
@@ -96,6 +98,9 @@ dwvar_..._color). Bi chan thi tool tu dung va nghi prAna 30 phut, khong doi het 
      giam gia chi bao, het hang -> "Xuat file Revise" dua so luong 0 (can Item ID).
 
 4. LUU Y
+   - prAna: nghi 15 giay sau moi san pham. Gap trang xac minh / bi chan thi nghi 30 giay truoc khi thu IP khac,
+     toi da 8 IP cho mot link. Neu cac IP van bi chan thi giu trang de xac minh thu cong toi da 5 phut;
+     het gio thi dung luot va giu cac dong chua xong. Bam Dung de ket thuc som.
    - Listing de Brand = Unbranded; tieu de co ten hang o dau (tat duoc trong Cai dat).
    - Gia eBay = gia dang ban tren site x % (lam tron .99). Size/mau het hang bi bo (tat duoc trong Cai dat).
      Rieng Hollister: tinh theo GIA GOC (khong lay gia sale, vi site nay hay sale 1-2 ngay roi ve gia cu).

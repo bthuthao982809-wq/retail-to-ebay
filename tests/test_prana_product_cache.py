@@ -52,9 +52,46 @@ class PranaProductCacheTests(unittest.TestCase):
         self.assertIsNone(core.url_filters(ALL_URL, all_colors))
         # A profile/row may change its copy without mutating subsequent rows.
         black["variants"][0]["price"] = 1
-        self.assertEqual(cache["2080891"]["variants"][0]["price"], 108)
+        cached = cache[app.Engine._prana_cache_key(self.mod, BLUE_URL, blue)]
+        self.assertEqual(cached["variants"][0]["price"], 108)
         self.assertEqual(all_colors["variants"][0]["price"], 108)
-        self.assertEqual(cache["2080891"]["url_color"], "Bluff Blue")
+        self.assertEqual(cached["url_color"], "Bluff Blue")
+
+    def test_partial_colors_coexist_and_repeat_profiles_do_not_refetch(self):
+        def scrape(fetcher, url):
+            color = "Black" if "=Black" in url else "Bluff Blue"
+            prod = product(colors=(color,))
+            prod.update(partial_colors=True, fixed_inseam="32 in")
+            return prod
+
+        self.mod.scrape.side_effect = scrape
+        cache = {}
+        for _profile in ("US1", "US3", "US4"):
+            blue = self.read(BLUE_URL, cache)
+            black = self.read(BLACK_URL, cache)
+            self.assertEqual({v["color"] for v in blue["variants"]}, {"Bluff Blue"})
+            self.assertEqual({v["color"] for v in black["variants"]}, {"Black"})
+        self.assertEqual(self.mod.scrape.call_count, 2)
+        self.assertEqual(set(cache), {("prana", "2080891", "bluff blue", "32 in"),
+                                      ("prana", "2080891", "black", "32 in")})
+        self.assertEqual(cache[("prana", "2080891", "black", "32 in")]["variants"][0]["price"], 54)
+
+    def test_cache_uses_fixed_inseam_instead_of_overridden_url_dimension(self):
+        prod = product(colors=("Bluff Blue",))
+        prod.update(partial_colors=True, fixed_inseam="32 in")
+        self.mod.scrape.side_effect = lambda fetcher, url: copy.deepcopy(prod)
+        cache = {}
+        self.read(BLUE_URL + "&dwvar_2080891_dimension=30", cache)
+        self.read(BLUE_URL + "&dwvar_2080891_dimension=32", cache)
+        self.assertEqual(self.mod.scrape.call_count, 1)
+        self.assertEqual(set(cache), {("prana", "2080891", "bluff blue", "32 in")})
+
+    def test_browser_is_prepared_only_when_a_product_must_be_read(self):
+        self.fetcher.prepare_product = Mock()
+        cache = {}
+        self.read(BLUE_URL, cache)
+        self.read(BLACK_URL, cache)
+        self.fetcher.prepare_product.assert_called_once_with(BLUE_URL)
 
     def test_requested_color_missing_from_cached_variants_is_read_fresh(self):
         for parameter in ("dwvar_2080891_color", "color", "colour"):
@@ -74,7 +111,7 @@ class PranaProductCacheTests(unittest.TestCase):
         self.read(other, cache)
         self.read(BLUE_URL, {})
         self.assertEqual(self.mod.scrape.call_count, 3)
-        self.assertEqual(set(cache), {"2080891", "2145891"})
+        self.assertEqual({key[1] for key in cache}, {"2080891", "2145891"})
 
     def test_cached_colors_keep_their_own_source_prices_when_percent_changes(self):
         cache = {}
@@ -85,7 +122,8 @@ class PranaProductCacheTests(unittest.TestCase):
         self.assertEqual(app.price_info(black, cfg, chosen)["price_text"], "$54.00 → $37.80")
         cfg["sites"]["prana"]["price_percent"] = "80"
         self.assertEqual(app.price_info(black, cfg, chosen)["price_text"], "$54.00 → $43.20")
-        self.assertEqual([v["price"] for v in cache["2080891"]["variants"]], [108, 54])
+        cached = next(iter(cache.values()))
+        self.assertEqual([v["price"] for v in cached["variants"]], [108, 54])
 
     def test_other_site_does_not_gain_prana_cache_and_bestbuy_still_requires_live_data(self):
         for site, live, expected_calls in (("hollister", True, 2), ("bestbuy", False, 2), ("bestbuy", True, 1)):
@@ -113,7 +151,8 @@ class PranaProductCacheTests(unittest.TestCase):
         seen = []
 
         def inspect_cache(s, fetcher, url, cache):
-            seen.append((copy.deepcopy(cache), cache.get("2080891") is session.results[0]["product"]))
+            key = app.Engine._prana_cache_key(self.mod, BLUE_URL, completed["product"])
+            seen.append((copy.deepcopy(cache), cache.get(key) is session.results[0]["product"]))
             raise SiteUnavailable("Offline test ended")
 
         with patch.object(core, "load_config", return_value=cfg), \
@@ -127,7 +166,8 @@ class PranaProductCacheTests(unittest.TestCase):
              patch.object(core, "export_run", return_value=([], [])):
             engine._run(session, items, upload=False)
         self.assertEqual(read.call_count, 1)
-        self.assertEqual(seen, [({"2080891": completed["product"]}, False)])
+        key = app.Engine._prana_cache_key(self.mod, BLUE_URL, completed["product"])
+        self.assertEqual(seen, [({key: completed["product"]}, False)])
         self.assertEqual(session.results[0], completed)
 
 

@@ -47,6 +47,8 @@ if not read("web/index.html") or not read("web/fonts/inter-latin.woff2"):
     problems.append("thieu giao dien / font")
 if not read("web/bestbuy_capture.js") or "camoufox.sync_api" not in pyz.toc:
     problems.append("thieu Camoufox / script doc Best Buy")
+if "sites.prana_browser" not in pyz.toc:
+    problems.append("thieu bo doc Camoufox prAna")
 if target.is_dir():
     secret = [p.name for p in internal.rglob("*") if p.name in ("private.key", "keygen.py", "config.json", "da_cap.csv")]
     if secret:

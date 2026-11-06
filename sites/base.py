@@ -46,6 +46,15 @@ class SiteUnavailable(SkipProduct):
     """Hết đường truy cập: thoát cả sản phẩm thay vì thử lại từng màu/size."""
 
 
+class SiteWaiting(SiteUnavailable):
+    """Phiên đang chờ xác minh hoặc thử lại, chưa kết luận lỗi sản phẩm."""
+
+    def __init__(self, message, retry_after=0, until=None):
+        super().__init__(message)
+        self.retry_after = max(0.0, float(retry_after))
+        self.until = float(until) if until is not None else time.time() + self.retry_after
+
+
 class Blocked(Exception):
     """Site chặn (403 / trang xác minh) — đổi proxy rồi thử lại."""
 
